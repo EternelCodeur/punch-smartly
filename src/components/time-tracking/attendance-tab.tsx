@@ -28,8 +28,8 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({ users }) => {
   });
 
   const currentHour = new Date().getHours();
-  const canMarkAttendance = currentHour >= 8 && currentHour < 12;
-  const isAfterDeadline = currentHour >= 12;
+  const canMarkAttendance = currentHour >= 8 && currentHour < 15;
+  const isAfterDeadline = currentHour >= 15;
 
   const handleUserClick = (user: User) => {
     if (isAfterDeadline) {

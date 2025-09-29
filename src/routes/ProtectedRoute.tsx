@@ -1,0 +1,25 @@
+import React from "react";
+import { Navigate, Outlet, useLocation } from "react-router-dom";
+import { Role, useAuth } from "@/context/AuthContext";
+
+interface ProtectedRouteProps {
+  allow: Role[];
+  redirectTo?: string;
+}
+
+export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allow, redirectTo = "/login" }) => {
+  const { isAuthenticated, user } = useAuth();
+  const location = useLocation();
+
+  if (!isAuthenticated || !user) {
+    return <Navigate to={redirectTo} replace state={{ from: location }} />;
+  }
+
+  if (!allow.includes(user.role)) {
+    // If authenticated but wrong role, route to their home
+    const fallback = user.role === "admin" ? "/admin" : "/pointage";
+    return <Navigate to={fallback} replace />;
+  }
+
+  return <Outlet />;
+};

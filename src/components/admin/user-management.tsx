@@ -6,28 +6,28 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Edit2, Trash2, Search } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, Eye } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useNavigate } from 'react-router-dom';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface User {
   id: string;
   firstName: string;
   lastName: string;
   position: string;
-  email: string;
-  status: 'active' | 'inactive';
+  site: string;
   createdAt: string;
 }
-
 export const UserManagement: React.FC = () => {
+  const navigate = useNavigate();
   const [users, setUsers] = useState<User[]>([
     {
       id: '1',
       firstName: 'Jean',
       lastName: 'Dupont',
       position: 'Développeur',
-      email: 'jean.dupont@entreprise.com',
-      status: 'active',
+      site: 'OGAR',
       createdAt: '2024-01-15',
     },
     {
@@ -35,8 +35,7 @@ export const UserManagement: React.FC = () => {
       firstName: 'Marie',
       lastName: 'Martin',
       position: 'Chef de projet',
-      email: 'marie.martin@entreprise.com',
-      status: 'active',
+      site: 'OGAR',
       createdAt: '2024-02-01',
     },
     {
@@ -44,8 +43,7 @@ export const UserManagement: React.FC = () => {
       firstName: 'Pierre',
       lastName: 'Bernard',
       position: 'Designer',
-      email: 'pierre.bernard@entreprise.com',
-      status: 'inactive',
+      site: 'SIEGE ARCHIGED',
       createdAt: '2024-01-20',
     },
   ]);
@@ -57,13 +55,13 @@ export const UserManagement: React.FC = () => {
     firstName: '',
     lastName: '',
     position: '',
-    email: '',
+    site: '',
   });
 
   const { toast } = useToast();
 
   const filteredUsers = users.filter(user =>
-    `${user.firstName} ${user.lastName} ${user.position} ${user.email}`
+    `${user.firstName} ${user.lastName} ${user.position} ${user.site}`
       .toLowerCase()
       .includes(searchTerm.toLowerCase())
   );
@@ -77,13 +75,13 @@ export const UserManagement: React.FC = () => {
       firstName: '',
       lastName: '',
       position: '',
-      email: '',
+      site: '',
     });
     setEditingUser(null);
   };
 
   const handleAddUser = () => {
-    if (!formData.firstName || !formData.lastName || !formData.position || !formData.email) {
+    if (!formData.firstName || !formData.lastName || !formData.position || !formData.site) {
       toast({
         title: "Champs obligatoires",
         description: "Veuillez remplir tous les champs.",
@@ -95,7 +93,6 @@ export const UserManagement: React.FC = () => {
     const newUser: User = {
       id: Date.now().toString(),
       ...formData,
-      status: 'active',
       createdAt: new Date().toISOString().split('T')[0],
     };
 
@@ -115,7 +112,7 @@ export const UserManagement: React.FC = () => {
       firstName: user.firstName,
       lastName: user.lastName,
       position: user.position,
-      email: user.email,
+      site: user.site,
     });
     setIsAddUserOpen(true);
   };
@@ -148,15 +145,6 @@ export const UserManagement: React.FC = () => {
     });
   };
 
-  const toggleUserStatus = (userId: string) => {
-    setUsers(prev =>
-      prev.map(user =>
-        user.id === userId
-          ? { ...user, status: user.status === 'active' ? 'inactive' : 'active' }
-          : user
-      )
-    );
-  };
 
   return (
     <div className="space-y-6">
@@ -220,14 +208,20 @@ export const UserManagement: React.FC = () => {
                   </div>
                   
                   <div>
-                    <Label htmlFor="email">Email</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      value={formData.email}
-                      onChange={(e) => handleInputChange('email', e.target.value)}
-                      placeholder="adresse@entreprise.com"
-                    />
+                    <Label htmlFor="site">Site</Label>
+                    <Select
+                      value={formData.site}
+                      onValueChange={(value) => handleInputChange('site', value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Site" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">Selectionnez la localisation</SelectItem>
+                        <SelectItem value="OGAR">OGAR</SelectItem>
+                        <SelectItem value="SIEGE ARCHIGED">SIEGE ARCHIGED</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
 
@@ -265,8 +259,7 @@ export const UserManagement: React.FC = () => {
                 <TableRow>
                   <TableHead>Nom complet</TableHead>
                   <TableHead>Fonction</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Statut</TableHead>
+                  <TableHead>Localisation</TableHead>
                   <TableHead>Date création</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -278,32 +271,35 @@ export const UserManagement: React.FC = () => {
                       {user.firstName} {user.lastName}
                     </TableCell>
                     <TableCell>{user.position}</TableCell>
-                    <TableCell>{user.email}</TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={user.status === 'active' ? 'default' : 'secondary'}
-                        className="cursor-pointer"
-                        onClick={() => toggleUserStatus(user.id)}
-                      >
-                        {user.status === 'active' ? 'Actif' : 'Inactif'}
-                      </Badge>
-                    </TableCell>
+                    <TableCell>{user.site}</TableCell>
+                   
                     <TableCell>{new Date(user.createdAt).toLocaleDateString('fr-FR')}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center gap-2 justify-end">
                         <Button
                           size="sm"
-                          variant="outline"
+                          className='bg-blue-500 hover:bg-blue-700'
                           onClick={() => handleEditUser(user)}
                         >
                           <Edit2 className="h-4 w-4" />
                         </Button>
                         <Button
                           size="sm"
-                          variant="outline"
+                          className="bg-red-500 hover:bg-red-700"
                           onClick={() => handleDeleteUser(user.id)}
                         >
                           <Trash2 className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          className='bg-green-500 hover:bg-green-700'
+                          onClick={() =>
+                            navigate(`/admin/users/${user.id}/attendance`, {
+                              state: { name: `${user.firstName} ${user.lastName}`, position: user.position },
+                            })
+                          }
+                        >
+                          <Eye className="h-4 w-4" />
                         </Button>
                       </div>
                     </TableCell>
