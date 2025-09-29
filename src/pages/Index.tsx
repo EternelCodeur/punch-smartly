@@ -118,11 +118,11 @@ const Index = () => {
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Arrivées :</span>
-                    <span className="font-medium">À partir de 08:00</span>
+                    <span className="font-medium">08:00 - 12:00</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Sorties :</span>
-                    <span className="font-medium">À partir de 13:00</span>
+                    <span className="font-medium">À partir de 12:00</span>
                   </div>
                 </div>
               </CardContent>

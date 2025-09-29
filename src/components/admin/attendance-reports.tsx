@@ -5,7 +5,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Calendar, Download, FileText, Filter } from 'lucide-react';
+import { AttendanceCalendar } from '@/components/ui/attendance-calendar';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Calendar, Download, FileText, Filter, Search, Grid, List } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface AttendanceRecord {
@@ -24,6 +26,8 @@ export const AttendanceReports: React.FC = () => {
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
   const [selectedUser, setSelectedUser] = useState('all');
   const [exportFormat, setExportFormat] = useState('pdf');
+  const [viewMode, setViewMode] = useState<'table' | 'calendar'>('table');
+  const [searchTerm, setSearchTerm] = useState('');
   const { toast } = useToast();
 
   // Mock data for demonstration
@@ -105,6 +109,38 @@ export const AttendanceReports: React.FC = () => {
 
   const monthlyStats = calculateMonthlyStats();
 
+  // Generate calendar data for selected user
+  const generateCalendarData = (month: string, userName: string) => {
+    const startDate = new Date(month + '-01');
+    const endDate = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 0);
+    const days = [];
+    
+    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+      const dayOfWeek = d.getDay();
+      // Skip weekends
+      if (dayOfWeek === 0 || dayOfWeek === 6) {
+        days.push({
+          date: new Date(d),
+          status: 'weekend' as const,
+        });
+        continue;
+      }
+      
+      // Mock attendance data
+      const isPresent = Math.random() > 0.2; // 80% attendance rate
+      days.push({
+        date: new Date(d),
+        status: isPresent ? 'present' as const : 'absent' as const,
+        arrivalTime: isPresent ? '08:' + String(Math.floor(Math.random() * 60)).padStart(2, '0') : undefined,
+        departureTime: isPresent ? '17:' + String(Math.floor(Math.random() * 60)).padStart(2, '0') : undefined,
+        hoursWorked: isPresent ? 7.5 + Math.random() * 1 : undefined,
+        breaks: isPresent ? [{ start: '12:00', end: '13:00', reason: 'Pause déjeuner' }] : undefined,
+      });
+    }
+    
+    return days;
+  };
+
   return (
     <div className="space-y-6">
       {/* Filters */}
@@ -119,7 +155,7 @@ export const AttendanceReports: React.FC = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <div>
               <Label htmlFor="month">Mois</Label>
               <Input
@@ -146,6 +182,20 @@ export const AttendanceReports: React.FC = () => {
                 </SelectContent>
               </Select>
             </div>
+
+            <div>
+              <Label htmlFor="search">Recherche</Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="search"
+                  placeholder="Rechercher..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+            </div>
             
             <div>
               <Label htmlFor="format">Format d'export</Label>
@@ -164,6 +214,29 @@ export const AttendanceReports: React.FC = () => {
               <Button onClick={handleExport} className="w-full">
                 <Download className="h-4 w-4 mr-2" />
                 Exporter
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex gap-2 mt-4">
+            <div className="flex border rounded-lg">
+              <Button
+                variant={viewMode === 'table' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('table')}
+                className="rounded-r-none"
+              >
+                <List className="h-4 w-4 mr-1" />
+                Liste
+              </Button>
+              <Button
+                variant={viewMode === 'calendar' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('calendar')}
+                className="rounded-l-none"
+              >
+                <Grid className="h-4 w-4 mr-1" />
+                Calendrier
               </Button>
             </div>
           </div>
@@ -209,82 +282,91 @@ export const AttendanceReports: React.FC = () => {
         </Card>
       </div>
 
-      {/* Attendance Records Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Calendar className="h-5 w-5" />
-            Rapports de Présence
-          </CardTitle>
-          <CardDescription>
-            Consultez les détails des pointages pour la période sélectionnée
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="border rounded-lg">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Utilisateur</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Arrivée</TableHead>
-                  <TableHead>Départ</TableHead>
-                  <TableHead>Pauses</TableHead>
-                  <TableHead>Total heures</TableHead>
-                  <TableHead>Statut</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredRecords.map((record) => (
-                  <TableRow key={record.id}>
-                    <TableCell className="font-medium">{record.userName}</TableCell>
-                    <TableCell>{new Date(record.date).toLocaleDateString('fr-FR')}</TableCell>
-                    <TableCell>{record.arrivalTime || '-'}</TableCell>
-                    <TableCell>{record.departureTime || '-'}</TableCell>
-                    <TableCell>
-                      <div className="text-sm">
-                        {record.breaks.map((breakItem, index) => (
-                          <div key={index} className="mb-1">
-                            {breakItem.start}-{breakItem.end}
-                            <span className="text-muted-foreground ml-1">
-                              ({breakItem.reason})
-                            </span>
-                          </div>
-                        ))}
-                        {record.breaks.length === 0 && '-'}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <span className="font-medium">{record.totalHours}h</span>
-                    </TableCell>
-                    <TableCell>
-                      <span
-                        className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${
-                          record.status === 'complete'
-                            ? 'bg-success/10 text-success'
-                            : record.status === 'incomplete'
-                            ? 'bg-warning/10 text-warning'
-                            : 'bg-destructive/10 text-destructive'
-                        }`}
-                      >
-                        {record.status === 'complete' ? 'Complet' : 
-                         record.status === 'incomplete' ? 'Incomplet' : 'Absent'}
-                      </span>
-                    </TableCell>
+      {/* Content based on view mode */}
+      {viewMode === 'table' ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <List className="h-5 w-5" />
+              Rapports de Présence - Liste
+            </CardTitle>
+            <CardDescription>
+              Consultez les détails des pointages pour la période sélectionnée
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="border rounded-lg">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Utilisateur</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Arrivée</TableHead>
+                    <TableHead>Départ</TableHead>
+                    <TableHead>Pauses</TableHead>
+                    <TableHead>Total heures</TableHead>
+                    <TableHead>Statut</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-
-          {filteredRecords.length === 0 && (
-            <div className="text-center py-8 text-muted-foreground">
-              <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>Aucun enregistrement trouvé pour cette période</p>
+                </TableHeader>
+                <TableBody>
+                  {filteredRecords.map((record) => (
+                    <TableRow key={record.id}>
+                      <TableCell className="font-medium">{record.userName}</TableCell>
+                      <TableCell>{new Date(record.date).toLocaleDateString('fr-FR')}</TableCell>
+                      <TableCell>{record.arrivalTime || '-'}</TableCell>
+                      <TableCell>{record.departureTime || '-'}</TableCell>
+                      <TableCell>
+                        <div className="text-sm">
+                          {record.breaks.map((breakItem, index) => (
+                            <div key={index} className="mb-1">
+                              {breakItem.start}-{breakItem.end}
+                              <span className="text-muted-foreground ml-1">
+                                ({breakItem.reason})
+                              </span>
+                            </div>
+                          ))}
+                          {record.breaks.length === 0 && '-'}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <span className="font-medium">{record.totalHours}h</span>
+                      </TableCell>
+                      <TableCell>
+                        <span
+                          className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${
+                            record.status === 'complete'
+                              ? 'bg-success/10 text-success border border-success/20'
+                              : record.status === 'incomplete'
+                              ? 'bg-warning/10 text-warning border border-warning/20'
+                              : 'bg-destructive/10 text-destructive border border-destructive/20'
+                          }`}
+                        >
+                          {record.status === 'complete' ? 'Complet' : 
+                           record.status === 'incomplete' ? 'Incomplet' : 'Absent'}
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
-          )}
-        </CardContent>
-      </Card>
+
+            {filteredRecords.length === 0 && (
+              <div className="text-center py-8 text-muted-foreground">
+                <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>Aucun enregistrement trouvé pour cette période</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      ) : (
+        <AttendanceCalendar
+          attendanceData={generateCalendarData(selectedMonth, selectedUser)}
+          month={new Date(selectedMonth + '-01')}
+          userName={selectedUser === 'all' ? 'Tous les employés' : 
+            users.find(u => u.id === selectedUser)?.name || 'Utilisateur inconnu'}
+        />
+      )}
     </div>
   );
 };

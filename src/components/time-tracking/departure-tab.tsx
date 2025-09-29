@@ -33,7 +33,7 @@ export const DepartureTab: React.FC = () => {
   });
 
   const currentHour = new Date().getHours();
-  const canMarkDeparture = currentHour >= 13;
+  const canMarkDeparture = currentHour >= 12;
 
   const handleInputChange = (field: keyof DepartureFormData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -43,7 +43,7 @@ export const DepartureTab: React.FC = () => {
     if (type === 'departure' && !canMarkDeparture) {
       toast({
         title: "Sortie non autorisée",
-        description: "Les sorties ne sont possibles qu'à partir de 13:00.",
+        description: "Les sorties ne sont possibles qu'à partir de 12:00.",
         variant: "destructive",
       });
       return;
@@ -98,7 +98,7 @@ export const DepartureTab: React.FC = () => {
             Fiche de Sortie
           </CardTitle>
           <CardDescription className="text-primary-foreground/80">
-            Enregistrez vos sorties temporaires et retours (sorties possibles à partir de 13:00)
+            Enregistrez vos sorties temporaires et retours (sorties possibles à partir de 12:00)
           </CardDescription>
         </CardHeader>
         <CardContent className="p-6">
@@ -172,7 +172,7 @@ export const DepartureTab: React.FC = () => {
           {!canMarkDeparture && (
             <div className="mt-6 p-4 bg-warning/10 border border-warning/20 rounded-lg">
               <p className="text-warning-foreground font-medium">
-                ⏰ Les sorties ne sont autorisées qu'à partir de 13:00
+                ⏰ Les sorties ne sont autorisées qu'à partir de 12:00
               </p>
               <p className="text-sm text-muted-foreground mt-1">
                 Heure actuelle : {currentTime}

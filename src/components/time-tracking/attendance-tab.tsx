@@ -28,13 +28,23 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({ users }) => {
   });
 
   const currentHour = new Date().getHours();
-  const canMarkAttendance = currentHour >= 8;
+  const canMarkAttendance = currentHour >= 8 && currentHour < 12;
+  const isAfterDeadline = currentHour >= 12;
 
   const handleUserClick = (user: User) => {
+    if (isAfterDeadline) {
+      toast({
+        title: "Trop tard pour pointer",
+        description: "Les pointages d'arrivée ne sont plus possibles après 12:00. Vous êtes marqué absent pour aujourd'hui.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     if (!canMarkAttendance) {
       toast({
         title: "Pointage non autorisé",
-        description: "Les pointages d'arrivée ne sont possibles qu'à partir de 08:00.",
+        description: "Les pointages d'arrivée sont possibles entre 08:00 et 12:00.",
         variant: "destructive",
       });
       return;
@@ -67,7 +77,7 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({ users }) => {
             Fiche de Présence
           </CardTitle>
           <CardDescription className="text-primary-foreground/80">
-            Cliquez sur votre nom pour pointer votre arrivée (disponible à partir de 08:00)
+            Cliquez sur votre nom pour pointer votre arrivée (disponible de 08:00 à 12:00)
           </CardDescription>
         </CardHeader>
         <CardContent className="p-6">
@@ -78,6 +88,8 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({ users }) => {
                 className={`cursor-pointer transition-all hover:shadow-md ${
                   canMarkAttendance 
                     ? 'hover:bg-accent border-border' 
+                    : isAfterDeadline
+                    ? 'opacity-50 cursor-not-allowed border-destructive/20 bg-destructive/5'
                     : 'opacity-50 cursor-not-allowed'
                 }`}
                 onClick={() => handleUserClick(user)}
@@ -100,9 +112,18 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({ users }) => {
           </div>
           
           {!canMarkAttendance && (
-            <div className="mt-6 p-4 bg-warning/10 border border-warning/20 rounded-lg">
-              <p className="text-warning-foreground font-medium">
-                ⏰ Les pointages d'arrivée ne sont disponibles qu'à partir de 08:00
+            <div className={`mt-6 p-4 rounded-lg ${
+              isAfterDeadline 
+                ? 'bg-destructive/10 border border-destructive/20' 
+                : 'bg-warning/10 border border-warning/20'
+            }`}>
+              <p className={`font-medium ${
+                isAfterDeadline ? 'text-destructive-foreground' : 'text-warning-foreground'
+              }`}>
+                {isAfterDeadline 
+                  ? '🚫 Délai dépassé - Marqué absent pour la journée' 
+                  : '⏰ Les pointages d\'arrivée sont disponibles de 08:00 à 12:00'
+                }
               </p>
               <p className="text-sm text-muted-foreground mt-1">
                 Heure actuelle : {currentTime}
