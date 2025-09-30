@@ -17,7 +17,6 @@ interface User {
   lastName: string;
   position: string;
   site: string;
-  createdAt: string;
 }
 export const UserManagement: React.FC = () => {
   const navigate = useNavigate();
@@ -28,7 +27,6 @@ export const UserManagement: React.FC = () => {
       lastName: 'Dupont',
       position: 'Développeur',
       site: 'OGAR',
-      createdAt: '2024-01-15',
     },
     {
       id: '2',
@@ -36,7 +34,6 @@ export const UserManagement: React.FC = () => {
       lastName: 'Martin',
       position: 'Chef de projet',
       site: 'OGAR',
-      createdAt: '2024-02-01',
     },
     {
       id: '3',
@@ -44,12 +41,12 @@ export const UserManagement: React.FC = () => {
       lastName: 'Bernard',
       position: 'Designer',
       site: 'SIEGE ARCHIGED',
-      createdAt: '2024-01-20',
     },
   ]);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
+  const [isEditUserOpen, setIsEditUserOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [formData, setFormData] = useState({
     firstName: '',
@@ -93,7 +90,6 @@ export const UserManagement: React.FC = () => {
     const newUser: User = {
       id: Date.now().toString(),
       ...formData,
-      createdAt: new Date().toISOString().split('T')[0],
     };
 
     setUsers(prev => [...prev, newUser]);
@@ -114,7 +110,7 @@ export const UserManagement: React.FC = () => {
       position: user.position,
       site: user.site,
     });
-    setIsAddUserOpen(true);
+    setIsEditUserOpen(true);
   };
 
   const handleUpdateUser = () => {
@@ -152,26 +148,36 @@ export const UserManagement: React.FC = () => {
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle>Gestion des Utilisateurs</CardTitle>
+              <CardTitle>Gestion des Employés</CardTitle>
               <CardDescription>
-                Ajoutez, modifiez ou supprimez les utilisateurs de l'application
+                Ajoutez, modifiez ou supprimez les employés de l'application
               </CardDescription>
             </div>
             
-            <Dialog open={isAddUserOpen} onOpenChange={setIsAddUserOpen}>
+            <Dialog
+              open={isAddUserOpen}
+              onOpenChange={(open) => {
+                setIsAddUserOpen(open);
+                if (open) {
+                  // Opening Add dialog: ensure clean state
+                  setEditingUser(null);
+                  resetForm();
+                }
+              }}
+            >
               <DialogTrigger asChild>
-                <Button onClick={resetForm}>
+                <Button onClick={() => { setIsAddUserOpen(true); resetForm(); }}>
                   <Plus className="h-4 w-4 mr-2" />
-                  Nouvel utilisateur
+                  Nouvel Employé
                 </Button>
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>
-                    {editingUser ? 'Modifier l\'utilisateur' : 'Nouvel utilisateur'}
+                    Nouvel Employé
                   </DialogTitle>
                   <DialogDescription>
-                    {editingUser ? 'Modifiez les informations de l\'utilisateur' : 'Ajoutez un nouvel utilisateur au système'}
+                    Ajoutez un nouvel Employé au système
                   </DialogDescription>
                 </DialogHeader>
 
@@ -229,9 +235,76 @@ export const UserManagement: React.FC = () => {
                   <Button variant="outline" onClick={() => setIsAddUserOpen(false)}>
                     Annuler
                   </Button>
-                  <Button onClick={editingUser ? handleUpdateUser : handleAddUser}>
-                    {editingUser ? 'Modifier' : 'Ajouter'}
+                  <Button onClick={handleAddUser}>Ajouter</Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            {/* Edit Employee Dialog */}
+            <Dialog open={isEditUserOpen} onOpenChange={setIsEditUserOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Modifier l'Employé</DialogTitle>
+                  <DialogDescription>
+                    Modifiez les informations de l'Employé puis enregistrez les changements
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-4 py-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="firstName_edit">Prénom</Label>
+                      <Input
+                        id="firstName_edit"
+                        value={formData.firstName}
+                        onChange={(e) => handleInputChange('firstName', e.target.value)}
+                        placeholder="Prénom"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="lastName_edit">Nom</Label>
+                      <Input
+                        id="lastName_edit"
+                        value={formData.lastName}
+                        onChange={(e) => handleInputChange('lastName', e.target.value)}
+                        placeholder="Nom"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="position_edit">Fonction</Label>
+                    <Input
+                      id="position_edit"
+                      value={formData.position}
+                      onChange={(e) => handleInputChange('position', e.target.value)}
+                      placeholder="Fonction dans l'entreprise"
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="site_edit">Site</Label>
+                    <Select
+                      value={formData.site}
+                      onValueChange={(value) => handleInputChange('site', value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Site" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">Selectionnez la localisation</SelectItem>
+                        <SelectItem value="OGAR">OGAR</SelectItem>
+                        <SelectItem value="SIEGE ARCHIGED">SIEGE ARCHIGED</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="flex gap-2 justify-end">
+                  <Button variant="outline" onClick={() => setIsEditUserOpen(false)}>
+                    Annuler
                   </Button>
+                  <Button onClick={handleUpdateUser}>Enregistrer</Button>
                 </div>
               </DialogContent>
             </Dialog>
@@ -260,7 +333,6 @@ export const UserManagement: React.FC = () => {
                   <TableHead>Nom complet</TableHead>
                   <TableHead>Fonction</TableHead>
                   <TableHead>Localisation</TableHead>
-                  <TableHead>Date création</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -273,7 +345,6 @@ export const UserManagement: React.FC = () => {
                     <TableCell>{user.position}</TableCell>
                     <TableCell>{user.site}</TableCell>
                    
-                    <TableCell>{new Date(user.createdAt).toLocaleDateString('fr-FR')}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center gap-2 justify-end">
                         <Button

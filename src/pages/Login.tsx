@@ -9,7 +9,6 @@ const Login: React.FC = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation() as any;
-
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -21,11 +20,10 @@ const Login: React.FC = () => {
     setLoading(true);
     try {
       await login(username.trim(), password);
-      // redirect to previous page or role-based default
+      // redirect to previous page or home redirect (role-based)
       const from = location.state?.from?.pathname as string | undefined;
       if (from) return navigate(from, { replace: true });
-      if (username === "admin") return navigate("/admin", { replace: true });
-      return navigate("/pointage", { replace: true });
+      return navigate("/", { replace: true });
     } catch (err: any) {
       setError(err?.message ?? "Impossible de se connecter");
     } finally {
@@ -45,7 +43,7 @@ const Login: React.FC = () => {
             <div className="space-y-2">
               <label className="text-sm font-medium">Nom d'utilisateur</label>
               <Input
-                placeholder="admin ou user"
+                placeholder="superadmin, admin ou user"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
@@ -59,7 +57,6 @@ const Login: React.FC = () => {
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                required
                 autoComplete="current-password"
               />
             </div>
@@ -70,7 +67,7 @@ const Login: React.FC = () => {
               {loading ? "Connexion..." : "Se connecter"}
             </Button>
             <div className="text-xs text-muted-foreground mt-2">
-              Démo: admin/admin123 • user/user123
+              Démo: superadmin/super123 • admin/admin123 • user/user123
             </div>
           </form>
         </CardContent>

@@ -99,8 +99,8 @@ const UserAttendance: React.FC = () => {
   const generatedAt = new Date().toLocaleString('fr-FR');
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto p-6 space-y-6 print:p-2 print:space-y-2">
+    <div className="min-h-screen bg-background container mx-auto">
+      <div className="container mx-auto p-6 space-y-6 print:p-2 print:space-y-2 print:[-webkit-print-color-adjust:exact] print:[print-color-adjust:exact]">
         <div className="flex items-center justify-between">
           <div className="print:hidden">
             <h1 className="text-2xl font-bold">Fiche de présence mensuelle</h1>
@@ -151,15 +151,12 @@ const UserAttendance: React.FC = () => {
           </div>
         </div>
 
-        <Card className="print:border-0 print:shadow-none">
-          <CardHeader className="print:py-2 print:px-2">
-            <CardTitle className="print:text-sm">Détails des présences</CardTitle>
-          </CardHeader>
-          <CardContent className="print:p-2">
+        <Card className="print:border-0 print:shadow-none"> 
+          <CardContent className="print:p-2 mt-6">
             <div className="overflow-x-auto print:overflow-visible">
-              <Table className="print:text-[10px] print:leading-tight print:table-fixed w-full">
+              <Table className="print:text-[12px] print:leading-tight print:table-fixed w-full">
                 <TableHeader>
-                  <TableRow className="bg-blue-200/100 print:text-[10px]">
+                  <TableRow className="bg-blue-100/100 print:bg-blue-200 print:text-[10px]">
                     <TableHead className="whitespace-nowrap text-center px-3 py-2 print:px-1 print:py-0.5">Jour</TableHead>
                     <TableHead className="whitespace-nowrap text-center px-3 py-2 print:px-1 print:py-0.5">Date</TableHead>
                     <TableHead className="whitespace-nowrap text-center px-3 py-2 print:px-1 print:py-0.5">Heure d'arrivée</TableHead>
@@ -177,7 +174,7 @@ const UserAttendance: React.FC = () => {
                     const jour = d.toLocaleDateString('fr-FR', { weekday: 'long' });
                     const date = d.toLocaleDateString('fr-FR');
                     return (
-                      <TableRow key={e.date} className="even:bg-muted/100  print:text-[10px]">
+                      <TableRow key={e.date} className="even:bg-muted/100 print:even:bg-gray-100 print:text-[10px]">
                         <TableCell className="capitalize text-center px-3 py-2 print:px-4 print:py-2">{jour}</TableCell>
                         <TableCell className="text-center px-3 py-2 print:px-4 print:py-2">{date}</TableCell>
                         <TableCell className="text-center px-3 py-2 print:px-4 print:py-2">{e.in ?? '-'}</TableCell>
@@ -188,15 +185,15 @@ const UserAttendance: React.FC = () => {
                       </TableRow>
                     );
                   })}
-                  <TableRow className="print:text-[10px] bg-amber-100 print:bg-gray-200">
+                  <TableRow className="print:text-[12px] bg-red-200 print:bg-red-200">
                     <TableCell
                       colSpan={6}
-                      className="text-right font-semibold px-3 py-2 print:px-4 print:py-2 border border-amber-300 print:border-gray-400 border-r-0 rounded-l-md print:rounded-none"
+                      className="text-right font-semibold px-3 py-2 print:px-4 print:py-2 border border-red-300 print:border-red-300"
                     >
                       Total mensuel
                     </TableCell>
                     <TableCell
-                      className="text-right font-bold px-3 py-2 print:px-4 print:py-2 border border-amber-300 print:border-gray-400 border-l-0 rounded-r-md print:rounded-none"
+                      className="text-center font-bold px-3 py-2 print:px-4 print:py-2 border border-red-300 print:border-red-300"
                     >
                       {formatHours(totals.monthMins)}
                     </TableCell>

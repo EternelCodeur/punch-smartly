@@ -10,13 +10,15 @@ import Admin from "./pages/Admin";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { ProtectedRoute } from "@/routes/ProtectedRoute";
 import UserAttendance from "@/pages/admin/UserAttendance";
+import SuperAdmin from "./pages/SuperAdmin";
 
 const queryClient = new QueryClient();
 
 const HomeRedirect = () => {
   const { isAuthenticated, user } = useAuth();
   if (!isAuthenticated || !user) return <Navigate to="/login" replace />;
-  return <Navigate to={user.role === "admin" ? "/admin" : "/pointage"} replace />;
+  const path = user.role === "superadmin" ? "/superadmin" : user.role === "admin" ? "/admin" : "/pointage";
+  return <Navigate to={path} replace />;
 };
 
 const App = () => (
@@ -37,6 +39,10 @@ const App = () => (
             <Route element={<ProtectedRoute allow={["admin"]} />}>
               <Route path="/admin" element={<Admin />} />
               <Route path="/admin/users/:id/attendance" element={<UserAttendance />} />
+            </Route>
+
+            <Route element={<ProtectedRoute allow={["superadmin"]} />}>
+              <Route path="/superadmin" element={<SuperAdmin />} />
             </Route>
 
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
