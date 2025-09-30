@@ -15,6 +15,7 @@ type AuthContextType = {
   createAccount: (username: string, password: string, role: Role) => Promise<void>;
   listAccounts: () => { username: string; role: Role }[];
   deleteAccount: (username: string) => Promise<void>;
+  loginWithPassword: (password: string) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -92,6 +93,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem(STORAGE_KEY);
   };
 
+  const loginWithPassword = async (password: string) => {
+    await new Promise((res) => setTimeout(res, 300));
+    const accounts = loadAccounts();
+    const matches = Object.values(accounts).filter(a => a.password === password);
+    if (matches.length === 0) throw new Error("Mot de passe invalide");
+    if (matches.length > 1) throw new Error("Mot de passe ambigü: plusieurs comptes correspondent");
+    const acc = matches[0];
+    const nextUser: AuthUser = { username: acc.username, role: acc.role };
+    setUser(nextUser);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(nextUser));
+  };
+
   const createAccount = async (username: string, password: string, role: Role) => {
     await new Promise((res) => setTimeout(res, 200));
     if (!username || !password) throw new Error("Nom d'utilisateur et mot de passe requis");
@@ -128,6 +141,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     createAccount,
     listAccounts,
     deleteAccount,
+    loginWithPassword,
   }), [user]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

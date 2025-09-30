@@ -6,10 +6,9 @@ import { useAuth } from "@/context/AuthContext";
 import { useLocation, useNavigate } from "react-router-dom";
 
 const Login: React.FC = () => {
-  const { login } = useAuth();
+  const { loginWithPassword } = useAuth();
   const navigate = useNavigate();
   const location = useLocation() as any;
-  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -19,7 +18,7 @@ const Login: React.FC = () => {
     setError(null);
     setLoading(true);
     try {
-      await login(username.trim(), password);
+      await loginWithPassword(password);
       // redirect to previous page or home redirect (role-based)
       const from = location.state?.from?.pathname as string | undefined;
       if (from) return navigate(from, { replace: true });
@@ -41,22 +40,13 @@ const Login: React.FC = () => {
         <CardContent>
           <form className="space-y-4" onSubmit={onSubmit}>
             <div className="space-y-2">
-              <label className="text-sm font-medium">Nom d'utilisateur</label>
-              <Input
-                placeholder="superadmin, admin ou user"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                required
-                autoComplete="username"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Mot de passe</label>
+              <label className="text-sm font-medium">Code Secret</label>
               <Input
                 type="password"
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                required
                 autoComplete="current-password"
               />
             </div>
@@ -67,7 +57,7 @@ const Login: React.FC = () => {
               {loading ? "Connexion..." : "Se connecter"}
             </Button>
             <div className="text-xs text-muted-foreground mt-2">
-              Démo: superadmin/super123 • admin/admin123 • user/user123
+              Démo: super123 • admin123 • user123
             </div>
           </form>
         </CardContent>
@@ -77,3 +67,4 @@ const Login: React.FC = () => {
 };
 
 export default Login;
+
