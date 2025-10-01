@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,6 +8,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { SignatureCanvas } from '@/components/ui/signature-canvas';
 import { LogOut, LogIn } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { listEmployes, type Employe, listTemporaryDepartures, createTemporaryDeparture, markTemporaryDepartureReturn, type TemporaryDeparture } from '@/lib/api';
+import { CHECKOUT_START_MIN, getNowMinutes } from '@/lib/config';
 
 interface DepartureFormData {
   firstName: string;
@@ -16,7 +18,19 @@ interface DepartureFormData {
   reason: string;
 }
 
-export const DepartureTab: React.FC = () => {
+interface User {
+  id: string;
+  firstName: string;
+  lastName: string;
+  position: string;
+}
+
+interface DepartureTabProps {
+  users: User[];
+  onUpdated?: () => void;
+}
+
+export const DepartureTab: React.FC<DepartureTabProps> = ({ users, onUpdated }) => {
   const [formData, setFormData] = useState<DepartureFormData>({
     firstName: '',
     lastName: '',
@@ -26,33 +40,156 @@ export const DepartureTab: React.FC = () => {
   const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);
   const [actionType, setActionType] = useState<'departure' | 'return'>('departure');
   const { toast } = useToast();
+  const [saving, setSaving] = useState(false);
+  const [monthDeps, setMonthDeps] = useState<TemporaryDeparture[]>([]);
+  const [depsLoading, setDepsLoading] = useState(false);
+
+  // Recherche à la demande
+  const [selectedEmp, setSelectedEmp] = useState<{ id: string; firstName: string; lastName: string; position: string } | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [results, setResults] = useState<Employe[]>([]);
 
   const currentTime = new Date().toLocaleTimeString('fr-FR', {
     hour: '2-digit',
     minute: '2-digit'
   });
 
-  const currentHour = new Date().getHours();
-  const canMarkDeparture = currentHour >= 12;
+  // Date du jour (YYYY-MM-DD)
+  const todayStr = (() => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  })();
+
+  // Deprecated gating: sorties autorisées à toute heure (conservé si besoin)
+  const nowMin = getNowMinutes();
+  const canMarkDeparture = true;
+
+  // YYYY-MM for current month
+  const monthStr = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2,'0')}`;
+  })();
+
+  const reloadMonth = async () => {
+    try {
+      setDepsLoading(true);
+      const list = await listTemporaryDepartures(monthStr);
+      setMonthDeps(list);
+    } catch (e: any) {
+      toast({ title: 'Erreur', description: e?.message || 'Chargement des sorties impossible', variant: 'destructive' });
+    } finally {
+      setDepsLoading(false);
+    }
+  };
+
+  // Résolution d'URL fichier backend: si le backend renvoie /storage/...
+  // on préfixe avec VITE_BACKEND_URL si défini, sinon on garde tel quel.
+  const resolveFileUrl = (url?: string | null) => {
+    if (!url) return '';
+    const base = (import.meta as any).env?.VITE_BACKEND_URL?.replace(/\/$/, '') || '';
+    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    if (url.startsWith('/')) return base ? `${base}${url}` : url;
+    return url;
+  };
+
+  // Retourne une source d'image valide pour la signature
+  const getSignatureSrc = (d: TemporaryDeparture): string => {
+    const file = resolveFileUrl(d.return_signature_file_url);
+    if (file) return file;
+    // Fallback base64 si présent
+    if (d.return_signature && d.return_signature.startsWith('data:image')) return d.return_signature;
+    return '';
+  };
+
+  // Affichage date: DD-MM-YYYY
+  const formatDate = (iso?: string | null) => {
+    if (!iso) return '-';
+    const parts = iso.split('-');
+    if (parts.length !== 3) return iso;
+    const [y, m, d] = parts;
+    return `${d}-${m}-${y}`;
+  };
+
+  // Charger la liste au montage
+  useEffect(() => {
+    reloadMonth();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [monthStr]);
+
+  const handleSearch = async () => {
+    const q = formData.lastName.trim().toLowerCase();
+    if (!q) {
+      toast({ title: 'Recherche', description: 'Saisissez un nom ou un prénom avant de rechercher.', variant: 'destructive' });
+      return;
+    }
+    try {
+      setSearching(true);
+      const emps = await listEmployes();
+      const nameMatches = emps.filter(e =>
+        e.first_name?.toLowerCase().includes(q) || e.last_name?.toLowerCase().includes(q)
+      );
+      if (nameMatches.length === 0) {
+        setResults([]);
+        setSelectedEmp(null);
+        toast({ title: 'Employé inconnu', description: 'Aucun employé ne correspond à votre recherche.', variant: 'destructive' });
+        return;
+      }
+
+      const signedToday = nameMatches.filter(e => !!e.arrival_signed && e.attendance_date === todayStr);
+      if (signedToday.length === 0) {
+        setResults([]);
+        setSelectedEmp(null);
+        toast({ title: "Employé absent", description: "Arrivée non signée aujourd'hui.", variant: 'destructive' });
+        return;
+      }
+
+      // Exclure ceux qui ont déjà signé le départ aujourd'hui
+      const available = signedToday.filter(e => !e.departure_signed);
+      if (available.length === 0) {
+        setResults([]);
+        setSelectedEmp(null);
+        toast({ title: "Employé déjà parti", description: "Le départ a déjà été signé pour aujourd'hui.", variant: 'destructive' });
+        return;
+      }
+
+      if (available.length === 1) {
+        const e = available[0];
+        setSelectedEmp({ id: String(e.id), firstName: e.first_name, lastName: e.last_name, position: e.position || '' });
+        setFormData(prev => ({ ...prev, firstName: e.first_name, lastName: e.last_name, position: e.position || '' }));
+        setResults([]);
+      } else {
+        // Plusieurs correspondances éligibles aujourd'hui (arrivée signée et pas encore partis): afficher la liste pour choisir
+        setResults(available.slice(0, 10));
+      }
+    } catch (e: any) {
+      toast({ title: 'Erreur', description: e?.message || 'Recherche impossible', variant: 'destructive' });
+    } finally {
+      setSearching(false);
+    }
+  };
 
   const handleInputChange = (field: keyof DepartureFormData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleSubmit = (type: 'departure' | 'return') => {
-    if (type === 'departure' && !canMarkDeparture) {
+  const handleSubmit = async (type: 'departure' | 'return') => {
+    if (!formData.lastName) {
       toast({
-        title: "Sortie non autorisée",
-        description: "Les sorties ne sont possibles qu'à partir de 12:00.",
+        title: "Champs obligatoires",
+        description: "Veuillez saisir votre nom puis lancer la recherche.",
         variant: "destructive",
       });
       return;
     }
 
-    if (!formData.firstName || !formData.lastName || !formData.position) {
+    // Requiert une sélection après recherche
+    if (!selectedEmp) {
       toast({
-        title: "Champs obligatoires",
-        description: "Veuillez remplir le nom, prénom et fonction.",
+        title: "Sélection requise",
+        description: "Cliquez sur votre fiche dans les résultats de recherche.",
         variant: "destructive",
       });
       return;
@@ -67,25 +204,72 @@ export const DepartureTab: React.FC = () => {
       return;
     }
 
-    setActionType(type);
+    if (type === 'departure') {
+      // Sortie: pas de signature, on crée directement côté backend
+      try {
+        setSaving(true);
+        await createTemporaryDeparture(Number(selectedEmp.id), formData.reason);
+        await reloadMonth();
+        toast({ title: 'Sortie enregistrée', description: `${formData.firstName} ${formData.lastName} à ${currentTime}` });
+        setFormData(prev => ({ ...prev, reason: '' }));
+        onUpdated?.();
+      } catch (e: any) {
+        toast({ title: 'Erreur', description: e?.message || 'Enregistrement impossible', variant: 'destructive' });
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+
+    // Retour: ouvre la signature
+    setActionType('return');
     setIsSignatureModalOpen(true);
   };
 
-  const handleSignatureComplete = (signature: string) => {
-    // TODO: Save departure/return record
-    const actionText = actionType === 'departure' ? 'Sortie' : 'Retour';
-    
-    toast({
-      title: `${actionText} enregistré${actionType === 'departure' ? 'e' : ''}`,
-      description: `${actionText} de ${formData.firstName} ${formData.lastName} à ${currentTime}`,
-      variant: "default",
-    });
-    
-    setIsSignatureModalOpen(false);
-    
-    // Clear form after departure, keep data for return
-    if (actionType === 'departure') {
-      setFormData(prev => ({ ...prev, reason: '' }));
+  const handleSignatureComplete = async (signature: string) => {
+    const fullFirst = formData.firstName.trim();
+    const fullLast = formData.lastName.trim();
+    const fullPos = formData.position.trim();
+    if (!fullFirst || !fullLast) return;
+
+    const match = selectedEmp;
+
+    if (!match) {
+      toast({ title: 'Employé introuvable', description: 'Nom, prénom ou fonction incorrect(s).', variant: 'destructive' });
+      return;
+    }
+
+    try {
+      setSaving(true);
+      if (actionType === 'departure') {
+        await createTemporaryDeparture(Number(match.id), formData.reason);
+        await reloadMonth();
+      } else {
+        // Trouver la dernière sortie ouverte (sans return_time) pour cet employé
+        const open = [...monthDeps]
+          .filter(d => d.employe_id === Number(match.id) && !d.return_time)
+          .sort((a,b)=> (a.date + a.departure_time).localeCompare(b.date + b.departure_time))
+          .pop();
+        if (!open) {
+          toast({ title: 'Aucune sortie ouverte', description: "Aucune sortie sans retour trouvée pour cet employé.", variant: 'destructive' });
+        } else {
+          await markTemporaryDepartureReturn(open.id, signature);
+          await reloadMonth();
+        }
+      }
+      const actionText = actionType === 'departure' ? 'Sortie' : 'Retour';
+      toast({
+        title: `${actionText} enregistrée`,
+        description: `${actionText} de ${fullFirst} ${fullLast} à ${currentTime}`,
+        variant: 'default',
+      });
+      setIsSignatureModalOpen(false);
+      if (actionType === 'departure') { setFormData(prev => ({ ...prev, reason: '' })); }
+      onUpdated?.();
+    } catch (e: any) {
+      toast({ title: 'Erreur', description: e?.message || 'Enregistrement impossible', variant: 'destructive' });
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -98,54 +282,59 @@ export const DepartureTab: React.FC = () => {
             Fiche de Sortie
           </CardTitle>
           <CardDescription className="text-primary-foreground/80">
-            Enregistrez vos sorties temporaires et retours (sorties possibles à partir de 12:00)
+            Enregistrez vos sorties temporaires
           </CardDescription>
         </CardHeader>
         <CardContent className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-4">
               <div>
-                <Label htmlFor="firstName">Prénom *</Label>
-                <Input
-                  id="firstName"
-                  value={formData.firstName}
-                  onChange={(e) => handleInputChange('firstName', e.target.value)}
-                  placeholder="Entrez votre prénom"
-                />
-              </div>
-              
-              <div>
-                <Label htmlFor="lastName">Nom *</Label>
-                <Input
-                  id="lastName"
-                  value={formData.lastName}
-                  onChange={(e) => handleInputChange('lastName', e.target.value)}
-                  placeholder="Entrez votre nom"
-                />
+                <Label htmlFor="lastName">Nom ou Prénom *</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="lastName"
+                    value={formData.lastName}
+                    onChange={(e) => handleInputChange('lastName', e.target.value)}
+                    placeholder="Entrez votre nom ou prénom"
+                  />
+                  <Button type="button" onClick={handleSearch} disabled={searching}>
+                    {searching ? 'Recherche…' : 'Rechercher'}
+                  </Button>
+                </div>
+                {/* Résultats */}
+                {results.length > 0 && (
+                  <div className="mt-2 border rounded">
+                    {results.map(e => (
+                      <button
+                        type="button"
+                        key={e.id}
+                        className={`w-full text-left px-3 py-2 hover:bg-muted ${selectedEmp?.id === String(e.id) ? 'bg-muted' : ''}`}
+                        onClick={() => {
+                          setSelectedEmp({ id: String(e.id), firstName: e.first_name, lastName: e.last_name, position: e.position || '' });
+                          setFormData(prev => ({ ...prev, firstName: e.first_name, lastName: e.last_name, position: e.position || '' }));
+                        }}
+                      >
+                        {e.first_name} {e.last_name} {e.position ? `• ${e.position}` : ''}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
             
             <div className="space-y-4">
-              <div>
-                <Label htmlFor="position">Fonction *</Label>
-                <Input
-                  id="position"
-                  value={formData.position}
-                  onChange={(e) => handleInputChange('position', e.target.value)}
-                  placeholder="Votre fonction dans l'entreprise"
-                />
-              </div>
-              
-              <div>
-                <Label htmlFor="reason">Motif de sortie</Label>
-                <Textarea
-                  id="reason"
-                  value={formData.reason}
-                  onChange={(e) => handleInputChange('reason', e.target.value)}
-                  placeholder="Précisez le motif de votre sortie..."
-                  rows={3}
-                />
-              </div>
+              {selectedEmp && (
+                <div>
+                  <Label htmlFor="reason">Motif de sortie</Label>
+                  <Textarea
+                    id="reason"
+                    value={formData.reason}
+                    onChange={(e) => handleInputChange('reason', e.target.value)}
+                    placeholder="Précisez le motif de votre sortie..."
+                    rows={3}
+                  />
+                </div>
+              )}
             </div>
           </div>
           
@@ -153,34 +342,103 @@ export const DepartureTab: React.FC = () => {
             <Button
               onClick={() => handleSubmit('departure')}
               className="flex-1"
-              disabled={!canMarkDeparture}
+              disabled={!selectedEmp}
             >
               <LogOut className="h-4 w-4 mr-2" />
               Enregistrer Sortie
             </Button>
-            
-            <Button
-              onClick={() => handleSubmit('return')}
-              variant="outline"
-              className="flex-1"
-            >
-              <LogIn className="h-4 w-4 mr-2" />
-              Enregistrer Retour
-            </Button>
           </div>
           
-          {!canMarkDeparture && (
-            <div className="mt-6 p-4 bg-warning/10 border border-warning/20 rounded-lg">
-              <p className="text-warning-foreground font-medium">
-                ⏰ Les sorties ne sont autorisées qu'à partir de 12:00
-              </p>
-              <p className="text-sm text-muted-foreground mt-1">
-                Heure actuelle : {currentTime}
-              </p>
-            </div>
-          )}
+          {/* Sorties temporaires autorisées à toute heure */}
         </CardContent>
       </Card>
+
+      {/* Tableau des sorties du mois (backend) */}
+      {monthDeps.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <LogOut className="h-5 w-5" />
+              Sorties du mois
+            </CardTitle>
+            <CardDescription>
+              Cliquez sur "Marquer retour" pour enregistrer l'heure de retour.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left border-b">
+                    <th className="py-2 pr-4">Employé</th>
+                    <th className="py-2 pr-4">Date</th>
+                    <th className="py-2 pr-4">Fonction</th>
+                    <th className="py-2 pr-4">Heure départ</th>
+                    <th className="py-2 pr-4">Heure retour</th>
+                    <th className="py-2 pr-4">Motif</th>
+                    <th className="py-2 pr-4">Signature</th>
+                    <th className="py-2 pr-4">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {monthDeps.map((d) => (
+                    <tr key={d.id} className="border-b last:border-b-0">
+                      <td className="py-2 pr-4">{d.employe ? `${d.employe.first_name} ${d.employe.last_name}` : `#${d.employe_id}`}</td>
+                      <td className="py-2 pr-4">{formatDate(d.date)}</td>
+                      <td className="py-2 pr-4">{d.employe?.position || '-'}</td>
+                      <td className="py-2 pr-4">{d.departure_time}</td>
+                      <td className="py-2 pr-4">{d.return_time || '-'}</td>
+                      <td className="py-2 pr-4">{d.reason || '-'}</td>
+                      <td className="py-2 pr-4">
+                        {(() => {
+                          const src = getSignatureSrc(d);
+                          return src ? (
+                            <img
+                              src={src}
+                              alt="Signature"
+                              style={{ width: 100, height: 100, objectFit: 'contain', borderRadius: 4 }}
+                              onError={(e) => {
+                                if (d.return_signature && d.return_signature.startsWith('data:image') && e.currentTarget.src !== d.return_signature) {
+                                  e.currentTarget.src = d.return_signature;
+                                } else {
+                                  e.currentTarget.replaceWith(document.createTextNode('-'));
+                                }
+                              }}
+                            />
+                          ) : '-';
+                        })()}
+                      </td>
+                      <td className="py-2 pr-4">
+                        {!d.return_time ? (
+                          <Button
+                            size="sm"
+                            onClick={() => {
+                              // Pré-remplir le formulaire et ouvrir la signature pour RETURN
+                              if (d.employe) {
+                                setFormData({ firstName: d.employe.first_name, lastName: d.employe.last_name, position: d.employe.position || '', reason: formData.reason });
+                                setSelectedEmp({ id: String(d.employe_id), firstName: d.employe.first_name, lastName: d.employe.last_name, position: d.employe.position || '' });
+                              } else {
+                                setFormData({ ...formData });
+                                setSelectedEmp({ id: String(d.employe_id), firstName: formData.firstName, lastName: formData.lastName, position: formData.position });
+                              }
+                              setActionType('return');
+                              setIsSignatureModalOpen(true);
+                            }}
+                          >
+                            Marquer retour
+                          </Button>
+                        ) : (
+                          <span className="text-emerald-600">Retour enregistré</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Dialog open={isSignatureModalOpen} onOpenChange={setIsSignatureModalOpen}>
         <DialogContent className="max-w-md">

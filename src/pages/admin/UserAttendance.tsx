@@ -4,42 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-
-// Simple mock entries: Replace with real data fetch later
-// Each entry = { date: 'YYYY-MM-DD', in: 'HH:MM', out: 'HH:MM', inSignature?: string, outSignature?: string }
-const mockMonthlyEntries = (year: number, month: number) => {
-  const days = new Date(year, month + 1, 0).getDate();
-  const entries: { date: string; in?: string; out?: string; inSignature?: string; outSignature?: string }[] = [];
-  for (let d = 1; d <= days; d++) {
-    const weekday = new Date(year, month, d).getDay(); // 0=Sun .. 6=Sat
-    const isWeekend = weekday === 0 || weekday === 6;
-    if (isWeekend) {
-      entries.push({ date: `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}` });
-    } else {
-      // randomize a little for demo
-      const late = (d % 5) === 0;
-      const early = (d % 7) === 0;
-      const inH = late ? 9 : 8;
-      const outH = early ? 16 : 17;
-      entries.push({
-        date: `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`,
-        in: `${String(inH).padStart(2, '0')}:00`,
-        out: `${String(outH).padStart(2, '0')}:00`,
-        // Demo signature placeholders; replace with real signature data URLs later
-        inSignature: late ? '—' : '✓',
-        outSignature: early ? '—' : '✓',
-      });
-    }
-  }
-  return entries;
-};
-
-function minutesBetween(inTime?: string, outTime?: string) {
-  if (!inTime || !outTime) return 0;
-  const [ih, im] = inTime.split(":").map(Number);
-  const [oh, om] = outTime.split(":").map(Number);
-  return (oh * 60 + om) - (ih * 60 + im);
-}
+import { getAttendanceSummary, getEmploye, type Employe, type AttendanceSummary } from "@/lib/api";
 
 function formatHours(mins: number) {
   const h = Math.floor(mins / 60);
@@ -50,9 +15,10 @@ function formatHours(mins: number) {
 function getMonthOptions(count = 12) {
   const now = new Date();
   const options: { value: string; label: string }[] = [];
+  // Start from current month and go forward (ascending)
   for (let i = 0; i < count; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const value = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+    const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     const label = d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
     options.push({ value, label });
   }
@@ -66,6 +32,8 @@ const UserAttendance: React.FC = () => {
   const location = useLocation() as any;
   const userName: string | undefined = location?.state?.name;
   const userPosition: string | undefined = location?.state?.position;
+  const [empName, setEmpName] = React.useState<string | undefined>(userName);
+  const [empPosition, setEmpPosition] = React.useState<string | undefined>(userPosition);
 
   const now = new Date();
   const defaultValue = `${params.get('period') ?? `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`}`;
@@ -74,17 +42,54 @@ const UserAttendance: React.FC = () => {
   const [year, month] = period.split('-').map(Number);
   const monthIndex = (month ?? now.getMonth()+1) - 1;
 
-  const entries = useMemo(() => mockMonthlyEntries(year, monthIndex), [year, monthIndex]);
+  const [summary, setSummary] = React.useState<AttendanceSummary | null>(null);
+  const [loading, setLoading] = React.useState<boolean>(false);
+  const [error, setError] = React.useState<string | null>(null);
 
-  const totals = useMemo(() => {
-    let monthMins = 0;
-    const perDay = entries.map(e => {
-      const mins = minutesBetween(e.in, e.out);
-      monthMins += mins;
-      return { ...e, mins };
-    });
-    return { perDay, monthMins };
-  }, [entries]);
+  // Fallback: si on arrive sans state (rafraichissement / lien direct), charger l'employé
+  React.useEffect(() => {
+    let alive = true;
+    (async () => {
+      if (!id) return;
+      if (empName && empPosition !== undefined) return; // déjà fournis via state
+      try {
+        const emp = await getEmploye(Number(id));
+        if (!alive) return;
+        setEmpName(`${emp.first_name} ${emp.last_name}`);
+        setEmpPosition(emp.position ?? '');
+      } catch (e) {
+        // ignore, on affichera #id
+      }
+    })();
+    return () => { alive = false; };
+  }, [id]);
+
+  React.useEffect(() => {
+    let alive = true;
+    async function run() {
+      if (!id) return;
+      try {
+        setLoading(true);
+        setError(null);
+        // If selected month is in the future, return empty table
+        const today = new Date();
+        const selectedMonthStart = new Date(year, monthIndex, 1);
+        if (selectedMonthStart > today) {
+          if (alive) setSummary({ perDay: [], monthMins: 0 });
+          return;
+        }
+        const monthStr = `${year}-${String(monthIndex+1).padStart(2,'0')}`;
+        const data = await getAttendanceSummary(Number(id), monthStr);
+        if (alive) setSummary(data);
+      } catch (e: any) {
+        if (alive) setError(e?.message || 'Chargement impossible');
+      } finally {
+        if (alive) setLoading(false);
+      }
+    }
+    run();
+    return () => { alive = false; };
+  }, [id, year, monthIndex]);
 
   const handleChangePeriod = (value: string) => {
     setPeriod(value);
@@ -95,7 +100,7 @@ const UserAttendance: React.FC = () => {
     }, { replace: true });
   };
 
-  const monthLabel = new Date(year, monthIndex, 1).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+  const monthLabel = new Date(year, monthIndex, 27).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
   const generatedAt = new Date().toLocaleString('fr-FR');
 
   return (
@@ -105,9 +110,9 @@ const UserAttendance: React.FC = () => {
           <div className="print:hidden">
             <h1 className="text-2xl font-bold">Fiche de présence mensuelle</h1>
             <p className="text-muted-foreground">
-              {userName ? (
+              {empName ? (
                 <>
-                  {userName}{userPosition ? ` • ${userPosition}` : ""} • {monthLabel}
+                  {empName}{empPosition ? ` • ${empPosition}` : ""} • {monthLabel}
                 </>
               ) : (
                 <>
@@ -138,9 +143,9 @@ const UserAttendance: React.FC = () => {
             <div className="text-xl font-extrabold tracking-wide">FICHE DE PRÉSENCE MENSUELLE</div>
             <div className="mt-1 text-sm text-muted-foreground">{monthLabel}</div>
             <div className="mt-2 font-medium">
-              {userName ? (
+              {empName ? (
                 <>
-                  {userName}{userPosition ? ` • ${userPosition}` : ""}
+                  {empName}{empPosition ? ` • ${empPosition}` : ""}
                 </>
               ) : (
                 <>
@@ -167,10 +172,22 @@ const UserAttendance: React.FC = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {totals.perDay.map((e) => {
+                  {loading && (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center py-6 text-muted-foreground">Chargement…</TableCell>
+                    </TableRow>
+                  )}
+                  {error && !loading && (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center py-6 text-destructive">{error}</TableCell>
+                    </TableRow>
+                  )}
+                  {!loading && !error && summary && summary.perDay.map((e) => {
                     const d = new Date(e.date);
                     const weekday = d.getDay(); // 0 Sunday, 6 Saturday
-                    if (weekday === 0 || weekday === 6) return null; // hide weekends
+                    // Hide weekends only if there is no attendance data for that day
+                    const hasData = !!(e.in || e.out || e.inSignature || e.outSignature);
+                    if ((weekday === 0 || weekday === 6) && !hasData) return null;
                     const jour = d.toLocaleDateString('fr-FR', { weekday: 'long' });
                     const date = d.toLocaleDateString('fr-FR');
                     return (
@@ -178,26 +195,50 @@ const UserAttendance: React.FC = () => {
                         <TableCell className="capitalize text-center px-3 py-2 print:px-4 print:py-2">{jour}</TableCell>
                         <TableCell className="text-center px-3 py-2 print:px-4 print:py-2">{date}</TableCell>
                         <TableCell className="text-center px-3 py-2 print:px-4 print:py-2">{e.in ?? '-'}</TableCell>
-                        <TableCell className="text-center px-3 py-2 print:px-4 print:py-2">{e.inSignature ?? '-'}</TableCell>
+                        <TableCell className="text-center px-3 py-2 print:px-4 print:py-2">
+                          {e.inSignature && typeof e.inSignature === 'string' && (
+                            e.inSignature.startsWith('data:image') ||
+                            e.inSignature.startsWith('/storage/') ||
+                            e.inSignature.startsWith('http://') ||
+                            e.inSignature.startsWith('https://')
+                          ) ? (
+                            <img src={e.inSignature} alt="Signature arrivée" className="inline-block h-6 w-auto print:h-5" />
+                          ) : (
+                            e.inSignature ? '✓' : '-'
+                          )}
+                        </TableCell>
                         <TableCell className="text-center px-3 py-2 print:px-4 print:py-2">{e.out ?? '-'}</TableCell>
-                        <TableCell className="text-center px-3 py-2 print:px-4 print:py-2">{e.outSignature ?? '-'}</TableCell>
+                        <TableCell className="text-center px-2 py-2 print:px-2 print:py-2">
+                          {e.outSignature && typeof e.outSignature === 'string' && (
+                            e.outSignature.startsWith('data:image') ||
+                            e.outSignature.startsWith('/storage/') ||
+                            e.outSignature.startsWith('http://') ||
+                            e.outSignature.startsWith('https://')
+                          ) ? (
+                            <img src={e.outSignature} alt="Signature départ" className="inline-block h-6 w-auto print:h-5" />
+                          ) : (
+                            e.outSignature ? '✓' : '-'
+                          )}
+                        </TableCell>
                         <TableCell className="text-center font-medium px-3 py-2 print:px-4 print:py-2">{formatHours(e.mins)}</TableCell>
                       </TableRow>
                     );
                   })}
-                  <TableRow className="print:text-[12px] bg-red-200 print:bg-red-200">
-                    <TableCell
-                      colSpan={6}
-                      className="text-right font-semibold px-3 py-2 print:px-4 print:py-2 border border-red-300 print:border-red-300"
-                    >
-                      Total mensuel
-                    </TableCell>
-                    <TableCell
-                      className="text-center font-bold px-3 py-2 print:px-4 print:py-2 border border-red-300 print:border-red-300"
-                    >
-                      {formatHours(totals.monthMins)}
-                    </TableCell>
-                  </TableRow>
+                  {summary && summary.perDay.length > 0 && (
+                    <TableRow className="print:text-[12px] bg-red-200 print:bg-red-200">
+                      <TableCell
+                        colSpan={6}
+                        className="text-right font-semibold px-3 py-2 print:px-4 print:py-2 border border-red-300 print:border-red-300"
+                      >
+                        Total mensuel
+                      </TableCell>
+                      <TableCell
+                        className="text-center font-bold px-3 py-2 print:px-4 print:py-2 border border-red-300 print:border-red-300"
+                      >
+                        {formatHours(summary?.monthMins || 0)}
+                      </TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
             </div>

@@ -1,48 +1,55 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Plus, Edit2, Trash2, Search, Eye } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { createEmploye, deleteEmploye, updateEmploye, listEntreprises, listEmployes, type Employe, Entreprise } from '@/lib/api';
 
 interface User {
   id: string;
   firstName: string;
   lastName: string;
   position: string;
-  site: string;
+  entrepriseId?: string | null;
+  entrepriseName: string;
 }
-export const UserManagement: React.FC = () => {
+type UserManagementProps = { entrepriseFilterId?: string };
+export const UserManagement: React.FC<UserManagementProps> = ({ entrepriseFilterId = 'all' }) => {
   const navigate = useNavigate();
-  const [users, setUsers] = useState<User[]>([
-    {
-      id: '1',
-      firstName: 'Jean',
-      lastName: 'Dupont',
-      position: 'Développeur',
-      site: 'OGAR',
-    },
-    {
-      id: '2',
-      firstName: 'Marie',
-      lastName: 'Martin',
-      position: 'Chef de projet',
-      site: 'OGAR',
-    },
-    {
-      id: '3',
-      firstName: 'Pierre',
-      lastName: 'Bernard',
-      position: 'Designer',
-      site: 'SIEGE ARCHIGED',
-    },
-  ]);
+  const [emps, setEmps] = useState<Employe[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const reload = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const all = await listEmployes();
+      setEmps(all);
+    } catch (e: any) {
+      setError(e?.message || 'Erreur de chargement');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { reload(); }, []);
+
+  const users: User[] = (emps || []).map(e => ({
+    id: String(e.id),
+    firstName: e.first_name,
+    lastName: e.last_name,
+    position: e.position || '',
+    entrepriseId: e.entreprise_id != null ? String(e.entreprise_id) : null,
+    entrepriseName: e.entreprise?.name ?? '',
+  }));
 
   const [searchTerm, setSearchTerm] = useState('');
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
@@ -52,16 +59,29 @@ export const UserManagement: React.FC = () => {
     firstName: '',
     lastName: '',
     position: '',
-    site: '',
+    entrepriseId: 'none' as string,
   });
+
+  const [entreprises, setEntreprises] = useState<Entreprise[]>([]);
+
+  React.useEffect(() => {
+    let alive = true;
+    listEntreprises()
+      .then((list) => { if (alive) setEntreprises(list); })
+      .catch(() => {})
+    return () => { alive = false; };
+  }, []);
 
   const { toast } = useToast();
 
-  const filteredUsers = users.filter(user =>
-    `${user.firstName} ${user.lastName} ${user.position} ${user.site}`
-      .toLowerCase()
-      .includes(searchTerm.toLowerCase())
-  );
+  const filteredUsers = useMemo(() => {
+    const base = entrepriseFilterId === 'all' ? users : users.filter(u => u.entrepriseId === entrepriseFilterId);
+    return base.filter(user =>
+      `${user.firstName} ${user.lastName} ${user.position} ${user.entrepriseName}`
+        .toLowerCase()
+        .includes(searchTerm.toLowerCase())
+    );
+  }, [users, entrepriseFilterId, searchTerm]);
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -72,34 +92,34 @@ export const UserManagement: React.FC = () => {
       firstName: '',
       lastName: '',
       position: '',
-      site: '',
+      entrepriseId: 'none',
     });
     setEditingUser(null);
   };
 
-  const handleAddUser = () => {
-    if (!formData.firstName || !formData.lastName || !formData.position || !formData.site) {
+  const handleAddUser = async () => {
+    if (!formData.firstName || !formData.lastName || !formData.position) {
       toast({
         title: "Champs obligatoires",
-        description: "Veuillez remplir tous les champs.",
+        description: "Veuillez remplir prénom, nom et fonction.",
         variant: "destructive",
       });
       return;
     }
-
-    const newUser: User = {
-      id: Date.now().toString(),
-      ...formData,
-    };
-
-    setUsers(prev => [...prev, newUser]);
-    toast({
-      title: "Utilisateur ajouté",
-      description: `${formData.firstName} ${formData.lastName} a été ajouté avec succès.`,
-    });
-
-    resetForm();
-    setIsAddUserOpen(false);
+    try {
+      await createEmploye({
+        first_name: formData.firstName,
+        last_name: formData.lastName,
+        position: formData.position,
+        entreprise_id: formData.entrepriseId === 'none' ? null : Number(formData.entrepriseId),
+      } as any);
+      toast({ title: 'Employé ajouté', description: `${formData.firstName} ${formData.lastName} a été ajouté avec succès.` });
+      resetForm();
+      setIsAddUserOpen(false);
+      reload();
+    } catch (e: any) {
+      toast({ title: 'Erreur', description: e?.message || 'Ajout impossible', variant: 'destructive' });
+    }
   };
 
   const handleEditUser = (user: User) => {
@@ -108,37 +128,43 @@ export const UserManagement: React.FC = () => {
       firstName: user.firstName,
       lastName: user.lastName,
       position: user.position,
-      site: user.site,
+      entrepriseId: user.entrepriseId ?? 'none',
     });
     setIsEditUserOpen(true);
   };
 
-  const handleUpdateUser = () => {
+  const handleUpdateUser = async () => {
     if (!editingUser) return;
-
-    setUsers(prev =>
-      prev.map(user =>
-        user.id === editingUser.id
-          ? { ...user, ...formData }
-          : user
-      )
-    );
-
-    toast({
-      title: "Utilisateur modifié",
-      description: `Les informations de ${formData.firstName} ${formData.lastName} ont été mises à jour.`,
-    });
-
-    resetForm();
-    setIsAddUserOpen(false);
+    try {
+      await updateEmploye(Number(editingUser.id), {
+        first_name: formData.firstName,
+        last_name: formData.lastName,
+        position: formData.position,
+        entreprise_id: formData.entrepriseId === 'none' ? null : Number(formData.entrepriseId),
+      } as any);
+      toast({ title: 'Employé modifié', description: `Les informations de ${formData.firstName} ${formData.lastName} ont été mises à jour.` });
+      resetForm();
+      setIsEditUserOpen(false);
+      reload();
+    } catch (e: any) {
+      toast({ title: 'Erreur', description: e?.message || 'Mise à jour impossible', variant: 'destructive' });
+    }
   };
 
-  const handleDeleteUser = (userId: string) => {
-    setUsers(prev => prev.filter(user => user.id !== userId));
-    toast({
-      title: "Utilisateur supprimé",
-      description: "L'utilisateur a été supprimé avec succès.",
-    });
+  const handleDeleteUser = async (userId: string) => {
+    try {
+      await deleteEmploye(Number(userId));
+      toast({ title: 'Employé supprimé', description: "L'employé a été supprimé avec succès." });
+      reload();
+    } catch (e: any) {
+      const msg = e?.message || '';
+      if (msg.includes('Not Found') || msg.includes('404')) {
+        toast({ title: 'Employé introuvable', description: "La fiche n'existe plus. Rafraîchissement de la liste.", variant: 'destructive' });
+        reload();
+        return;
+      }
+      toast({ title: 'Erreur', description: msg || 'Suppression impossible', variant: 'destructive' });
+    }
   };
 
 
@@ -154,6 +180,10 @@ export const UserManagement: React.FC = () => {
               </CardDescription>
             </div>
             
+            <Button onClick={() => { setIsAddUserOpen(true); resetForm(); }}>
+              <Plus className="h-4 w-4 mr-2" />
+              Nouvel Employé
+            </Button>
             <Dialog
               open={isAddUserOpen}
               onOpenChange={(open) => {
@@ -165,12 +195,6 @@ export const UserManagement: React.FC = () => {
                 }
               }}
             >
-              <DialogTrigger asChild>
-                <Button onClick={() => { setIsAddUserOpen(true); resetForm(); }}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Nouvel Employé
-                </Button>
-              </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>
@@ -214,18 +238,19 @@ export const UserManagement: React.FC = () => {
                   </div>
                   
                   <div>
-                    <Label htmlFor="site">Site</Label>
+                    <Label htmlFor="entreprise">Entreprise</Label>
                     <Select
-                      value={formData.site}
-                      onValueChange={(value) => handleInputChange('site', value)}
+                      value={formData.entrepriseId}
+                      onValueChange={(value) => handleInputChange('entrepriseId', value)}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Site" />
+                        <SelectValue placeholder="(Optionnel) Lier à une entreprise" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Selectionnez la localisation</SelectItem>
-                        <SelectItem value="OGAR">OGAR</SelectItem>
-                        <SelectItem value="SIEGE ARCHIGED">SIEGE ARCHIGED</SelectItem>
+                        <SelectItem value="none">Aucune</SelectItem>
+                        {entreprises.map((ent) => (
+                          <SelectItem key={ent.id} value={String(ent.id)}>{ent.name}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -283,18 +308,19 @@ export const UserManagement: React.FC = () => {
                   </div>
 
                   <div>
-                    <Label htmlFor="site_edit">Site</Label>
+                    <Label htmlFor="entreprise_edit">Entreprise</Label>
                     <Select
-                      value={formData.site}
-                      onValueChange={(value) => handleInputChange('site', value)}
+                      value={formData.entrepriseId}
+                      onValueChange={(value) => handleInputChange('entrepriseId', value)}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Site" />
+                        <SelectValue placeholder="(Optionnel) Lier à une entreprise" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Selectionnez la localisation</SelectItem>
-                        <SelectItem value="OGAR">OGAR</SelectItem>
-                        <SelectItem value="SIEGE ARCHIGED">SIEGE ARCHIGED</SelectItem>
+                        <SelectItem value="none">Aucune</SelectItem>
+                        {entreprises.map((ent) => (
+                          <SelectItem key={ent.id} value={String(ent.id)}>{ent.name}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -332,18 +358,28 @@ export const UserManagement: React.FC = () => {
                 <TableRow>
                   <TableHead>Nom complet</TableHead>
                   <TableHead>Fonction</TableHead>
-                  <TableHead>Localisation</TableHead>
+                  <TableHead>Entreprise</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredUsers.map((user) => (
+                {loading && (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center py-6 text-muted-foreground">Chargement…</TableCell>
+                  </TableRow>
+                )}
+                {error && !loading && (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center py-6 text-destructive">{error}</TableCell>
+                  </TableRow>
+                )}
+                {!loading && !error && filteredUsers.map((user) => (
                   <TableRow key={user.id}>
                     <TableCell className="font-medium">
                       {user.firstName} {user.lastName}
                     </TableCell>
                     <TableCell>{user.position}</TableCell>
-                    <TableCell>{user.site}</TableCell>
+                    <TableCell>{user.entrepriseName}</TableCell>
                    
                     <TableCell className="text-right">
                       <div className="flex items-center gap-2 justify-end">
@@ -380,7 +416,7 @@ export const UserManagement: React.FC = () => {
             </Table>
           </div>
 
-          {filteredUsers.length === 0 && (
+          {!loading && !error && filteredUsers.length === 0 && (
             <div className="text-center py-8 text-muted-foreground">
               Aucun utilisateur trouvé
             </div>

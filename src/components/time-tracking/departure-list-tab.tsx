@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { SignatureCanvas } from '@/components/ui/signature-canvas';
-import { Clock, Users } from 'lucide-react';
+import { LogOut, Users } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { attendanceCheckIn } from '@/lib/api';
-import { CHECKIN_START_MIN, CHECKIN_END_MIN, getNowMinutes } from '@/lib/config';
+import { attendanceCheckOut } from '@/lib/api';
+import { CHECKOUT_START_MIN, getNowMinutes } from '@/lib/config';
+
 interface User {
   id: string;
   firstName: string;
@@ -14,12 +14,12 @@ interface User {
   position: string;
 }
 
-interface AttendanceTabProps {
+interface DepartureListTabProps {
   users: User[];
   onUpdated?: () => void;
 }
 
-export const AttendanceTab: React.FC<AttendanceTabProps> = ({ users, onUpdated }) => {
+export const DepartureListTab: React.FC<DepartureListTabProps> = ({ users, onUpdated }) => {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);
   const { toast } = useToast();
@@ -31,28 +31,17 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({ users, onUpdated }
   });
 
   const nowMin = getNowMinutes();
-  const canMarkAttendance = nowMin >= CHECKIN_START_MIN && nowMin < CHECKIN_END_MIN;
-  const isAfterDeadline = nowMin >= CHECKIN_END_MIN;
+  const canMarkDeparture = nowMin >= CHECKOUT_START_MIN; // à partir de l'heure configurée
 
   const handleUserClick = (user: User) => {
-    if (isAfterDeadline) {
+    if (!canMarkDeparture) {
       toast({
-        title: " Délai dépassé - Les pointages d'arrivée ne sont plus possibles après 10:00.",
-        description: "",
+        title: "Sortie non autorisée",
+        description: `Les sorties ne sont possibles qu'à partir de ${String(Math.floor(CHECKOUT_START_MIN/60)).padStart(2,'0')}:${String(CHECKOUT_START_MIN%60).padStart(2,'0')}.`,
         variant: "destructive",
       });
       return;
     }
-    
-    if (!canMarkAttendance) {
-      toast({
-        title: "Pointage non autorisé",
-        description: "Les pointages d'arrivée sont possibles entre 08:00 et 10:00.",
-        variant: "destructive",
-      });
-      return;
-    }
-    
     setSelectedUser(user);
     setIsSignatureModalOpen(true);
   };
@@ -61,10 +50,10 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({ users, onUpdated }
     if (!selectedUser) return;
     try {
       setSaving(true);
-      await attendanceCheckIn(Number(selectedUser.id), signature);
+      await attendanceCheckOut(Number(selectedUser.id), signature);
       toast({
-        title: 'Pointage enregistré',
-        description: `Arrivée de ${selectedUser.firstName} ${selectedUser.lastName} à ${currentTime}`,
+        title: 'Départ enregistré',
+        description: `Départ de ${selectedUser.firstName} ${selectedUser.lastName} à ${currentTime}`,
         variant: 'default',
       });
       setIsSignatureModalOpen(false);
@@ -82,12 +71,11 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({ users, onUpdated }
       <Card>
         <CardHeader className="bg-gradient-primary text-primary-foreground">
           <CardTitle className="flex items-center gap-2">
-            <Clock className="h-5 w-5" />
-            Fiche de Présence
+            <LogOut className="h-5 w-5" />
+            Liste des Départs
           </CardTitle>
           <CardDescription className="text-primary-foreground/80">
-            Cliquez sur votre nom pour pointer votre arrivée (disponible de {String(Math.floor(CHECKIN_START_MIN/60)).padStart(2,'0')}
-            :{String(CHECKIN_START_MIN%60).padStart(2,'0')} à {String(Math.floor(CHECKIN_END_MIN/60)).padStart(2,'0')}:{String(CHECKIN_END_MIN%60).padStart(2,'0')})
+            Cliquez sur votre nom pour signer votre départ (à partir de {String(Math.floor(CHECKOUT_START_MIN/60)).padStart(2,'0')}:{String(CHECKOUT_START_MIN%60).padStart(2,'0')})
           </CardDescription>
         </CardHeader>
         <CardContent className="p-6">
@@ -96,11 +84,9 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({ users, onUpdated }
               <Card
                 key={user.id}
                 className={`cursor-pointer transition-all hover:shadow-md ${
-                  canMarkAttendance
+                  canMarkDeparture
                     ? 'hover:bg-accent border-border'
-                    : isAfterDeadline
-                    ? 'opacity-50 cursor-not-allowed border-destructive/20 bg-destructive/5'
-                    : 'opacity-50 cursor-not-allowed'
+                    : 'opacity-50 cursor-not-allowed border-warning/20 bg-warning/5'
                 }`}
                 onClick={() => handleUserClick(user)}
               >
@@ -115,7 +101,9 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({ users, onUpdated }
                       </h3>
                       <p className="text-sm text-muted-foreground">{user.position}</p>
                       <p className="text-xs mt-1 text-emerald-600">
-                        {canMarkAttendance ? 'Arrivée non signée' : null}
+                        {canMarkDeparture
+                          ? 'Prêt pour départ'
+                          : `Départs à partir de ${String(Math.floor(CHECKOUT_START_MIN/60)).padStart(2,'0')}:${String(CHECKOUT_START_MIN%60).padStart(2,'0')}`}
                       </p>
                     </div>
                   </div>
@@ -123,12 +111,12 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({ users, onUpdated }
               </Card>
             ))}
           </div>
-          {!canMarkAttendance && (
+          {!canMarkDeparture && (
             <div className="mt-6 p-4 bg-warning/10 border border-warning/20 rounded-lg">
               <p className="text-warning-foreground font-medium text-black">
-                ⏰ Délai dépassé - Les pointages d'arrivée ne sont plus disponibles après {String(Math.floor(CHECKIN_END_MIN/60)).padStart(2,'0')}:{String(CHECKIN_END_MIN%60).padStart(2,'0')}
+                ⏰ Les départs ne sont autorisés qu'à partir de {String(Math.floor(CHECKOUT_START_MIN/60)).padStart(2,'0')}:{String(CHECKOUT_START_MIN%60).padStart(2,'0')}
               </p>
-              </div>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -136,18 +124,18 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({ users, onUpdated }
       <Dialog open={isSignatureModalOpen} onOpenChange={setIsSignatureModalOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Signature de pointage</DialogTitle>
+            <DialogTitle>Signature de départ</DialogTitle>
             <DialogDescription>
               {selectedUser && (
                 <>
-                  Pointage d'arrivée pour <strong>{selectedUser.firstName} {selectedUser.lastName}</strong>
+                  Départ de <strong>{selectedUser.firstName} {selectedUser.lastName}</strong>
                   <br />
                   Heure : {currentTime}
                 </>
               )}
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="py-4">
             <SignatureCanvas
               onSignatureComplete={handleSignatureComplete}
