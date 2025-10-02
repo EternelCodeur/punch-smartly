@@ -31,8 +31,14 @@ const SuperAdmin: React.FC = () => {
 
   const [entFormName, setEntFormName] = useState("");
 
+  // Helper: always include credentials so backend receives HttpOnly JWT cookie
+  const authFetch = async (input: RequestInfo, init?: RequestInit) => {
+    const headers: Record<string, string> = { ...(init?.headers as any) };
+    return fetch(input, { credentials: 'include', ...init, headers });
+  };
+
   const fetchEntreprises = async () => {
-    const res = await fetch(`/api/entreprises`);
+    const res = await authFetch(`/api/entreprises`);
     if (!res.ok) throw new Error("Impossible de charger les entreprises");
     const json = await res.json();
     const data: Entreprise[] = Array.isArray(json) ? json : (json?.data ?? []);
@@ -42,7 +48,7 @@ const SuperAdmin: React.FC = () => {
   const fetchUsers = async () => {
     const params = new URLSearchParams();
     if (selectedEntrepriseId && selectedEntrepriseId !== "all") params.set("enterprise_id", selectedEntrepriseId);
-    const res = await fetch(`/api/users?${params.toString()}`);
+    const res = await authFetch(`/api/users?${params.toString()}`);
     if (!res.ok) throw new Error("Impossible de charger les utilisateurs");
     const json = await res.json();
     const data: BackendUser[] = Array.isArray(json) ? json : (json?.data ?? []);
@@ -80,7 +86,7 @@ const SuperAdmin: React.FC = () => {
     }
     setCreating(true);
     try {
-      const res = await fetch(`/api/users`, {
+      const res = await authFetch(`/api/users`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -117,7 +123,7 @@ const SuperAdmin: React.FC = () => {
     }
     setLoading(true);
     try {
-      const res = await fetch(`/api/users/${id}`, { method: "DELETE" });
+      const res = await authFetch(`/api/users/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Suppression impossible");
       toast({ title: "Compte supprimé", description: name });
       await fetchUsers();
@@ -134,7 +140,7 @@ const SuperAdmin: React.FC = () => {
       return;
     }
     try {
-      const res = await fetch(`/api/entreprises`, {
+      const res = await authFetch(`/api/entreprises`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: entFormName.trim() })

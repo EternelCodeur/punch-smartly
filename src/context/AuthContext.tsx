@@ -94,13 +94,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const loginWithPassword = async (password: string) => {
-    await new Promise((res) => setTimeout(res, 300));
-    const accounts = loadAccounts();
-    const matches = Object.values(accounts).filter(a => a.password === password);
-    if (matches.length === 0) throw new Error("Mot de passe invalide");
-    if (matches.length > 1) throw new Error("Mot de passe ambigü: plusieurs comptes correspondent");
-    const acc = matches[0];
-    const nextUser: AuthUser = { username: acc.username, role: acc.role };
+    const res = await fetch(`/api/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ password }),
+    });
+    if (!res.ok) {
+      let msg = 'Identifiants invalides';
+      try { const j = await res.json(); if (j?.message) msg = j.message; } catch {}
+      throw new Error(msg);
+    }
+    const data = await res.json();
+    const srvUser = data?.user ?? data;
+    if (!srvUser) throw new Error('Réponse de connexion invalide');
+    const nextUser: AuthUser = { username: srvUser.nom ?? 'inconnu', role: srvUser.role };
     setUser(nextUser);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(nextUser));
   };

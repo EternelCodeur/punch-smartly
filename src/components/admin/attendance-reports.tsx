@@ -22,6 +22,10 @@ type Row = {
   departure_time?: string | null;
   return_time?: string | null;
   reason?: string | null;
+  // Raw fields from backend to better resolve image source
+  return_signature?: string | null;
+  return_signature_file_url?: string | null;
+  // Kept for backward compatibility; may be removed later
   signatureUrl?: string | null; // prefer file url if available
 };
 
@@ -37,6 +41,29 @@ export const AttendanceReports: React.FC = () => {
   const [viewMode, setViewMode] = useState<'table' | 'calendar'>('table');
   const [searchTerm, setSearchTerm] = useState('');
   const { toast } = useToast();
+
+  // Normalize signature URL into a displayable image URL.
+  // Handles: data URLs, http(s), blob:, relative /storage or storage/, base64-like strings (URL-safe too), trims whitespace.
+  const resolveSignatureUrl = (raw: any): string | null => {
+    if (raw === null || raw === undefined) return null;
+    let s = String(raw).trim();
+    if (!s) return null;
+    // Already a data URL (any mime) or blob
+    if (s.startsWith('data:image') || s.startsWith('data:')) return s;
+    if (s.startsWith('blob:')) return s;
+    // Absolute http(s)
+    if (/^https?:\/\//i.test(s)) return s;
+    // Relative paths
+    if (s.startsWith('/storage/') || s.startsWith('/uploads/') || s.startsWith('/')) return `${BACKEND_BASE}${s}`;
+    if (/^(storage|uploads)\//.test(s)) return `${BACKEND_BASE}/${s}`;
+    // Base64-like (allow URL-safe -_). Strip whitespace and prefix
+    const compact = s.replace(/\s+/g, '');
+    const base64Like = /^[A-Za-z0-9+\/=_-]+$/.test(compact);
+    if (base64Like && compact.length > 40) {
+      return `data:image/png;base64,${compact}`;
+    }
+    return null; // Unknown format
+  };
 
   // Load entreprises for filter
   useEffect(() => {
@@ -64,6 +91,8 @@ export const AttendanceReports: React.FC = () => {
           departure_time: d.departure_time ?? null,
           return_time: d.return_time ?? null,
           reason: d.reason ?? null,
+          return_signature: d.return_signature ?? null,
+          return_signature_file_url: d.return_signature_file_url ?? null,
           signatureUrl: d.return_signature_file_url || d.return_signature || null,
         }));
         if (alive) setRows(mapped);
@@ -83,19 +112,99 @@ export const AttendanceReports: React.FC = () => {
   }, [rows, searchTerm]);
 
   const handleExport = () => {
-    const format = exportFormat === 'pdf' ? 'PDF' : 'CSV';
-    toast({
-      title: `Export ${format} lancé`,
-      description: `Le rapport sera téléchargé dans quelques instants.`,
-    });
+    // Print the current table with custom styles (header bg blue, striped rows)
+    const title = 'Fiche de sortie';
+    const monthLabel = new Date(selectedMonth + '-01').toLocaleDateString('fr-FR', { year: 'numeric', month: 'long' });
+    const entrepriseLabel = selectedEntreprise !== 'all' ? ` — ${entreprises.find(e => e.id === Number(selectedEntreprise))?.name}` : '';
 
-    // TODO: Implement actual export functionality
-    console.log('Exporting data:', {
-      format: exportFormat,
-      month: selectedMonth,
-      entreprise: selectedEntreprise,
-      records: filteredRows,
-    });
+    const html = `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>${title} - ${monthLabel}</title>
+  <style>
+    body{font-family: ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; padding:24px; color:#0f172a;}
+    h1{font-size:18px; margin:0 0 16px;}
+    table{width:100%; border-collapse: collapse;}
+    th, td{border:1px solid #e2e8f0; padding:8px; font-size:12px; text-align:left;}
+    thead tr{background:#dbeafe;} /* Tailwind bg-blue-100 */
+    tbody tr:nth-child(odd){background:#f8fafc;} /* slate-50 */
+    tbody tr:nth-child(even){background:#ffffff;}
+    img{height:24px; width:auto; object-fit:contain;}
+    @media print { @page { size: A4; margin: 12mm; } }
+  </style>
+  </head>
+  <body>
+    <h1>${title} — ${monthLabel}${entrepriseLabel}</h1>
+    <table>
+      <thead>
+        <tr>
+          <th>Employé</th>
+          <th>Date</th>
+          <th>Sortie</th>
+          <th>Retour</th>
+          <th>Motif</th>
+          <th>Signature</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${filteredRows.map((r) => {
+          const dateStr = new Date(r.date).toLocaleDateString('fr-FR');
+          const dep = r.departure_time || '-';
+          const ret = r.return_time || '-';
+          const reason = r.reason || '-';
+          const url = (() => {
+            // Prefer embedded data URL for print to avoid cross-origin/image blocking
+            if (r.return_signature && typeof r.return_signature === 'string' && r.return_signature.trim().startsWith('data:image')) {
+              return r.return_signature.trim();
+            }
+            const src = getSignatureSrc(r);
+            return src || null;
+          })();
+          const sigCell = (r.return_signature || r.return_signature_file_url || r.signatureUrl)
+            ? (url ? `<img src="${url}" alt="Signature" />` : '✓')
+            : '-';
+          return `<tr>
+            <td>${r.employeeName}</td>
+            <td>${dateStr}</td>
+            <td>${dep}</td>
+            <td>${ret}</td>
+            <td>${reason}</td>
+            <td>${sigCell}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+    <script>
+      function whenImagesReady(cb){
+        var imgs = Array.prototype.slice.call(document.images || []);
+        if (imgs.length === 0) { cb(); return; }
+        var pending = imgs.length; var done = function(){ if(--pending <= 0) cb(); };
+        imgs.forEach(function(img){
+          if (img.complete) { done(); }
+          else {
+            img.addEventListener('load', done, { once: true });
+            img.addEventListener('error', done, { once: true });
+          }
+        });
+        setTimeout(cb, 2500); // fallback timeout
+      }
+      window.onload = function(){ whenImagesReady(function(){ window.print(); setTimeout(function(){ window.close(); }, 300); }); };
+    <\/script>
+  </body>
+  </html>`;
+
+    const win = window.open('', '_blank');
+    if (win) {
+      win.document.open();
+      win.document.write(html);
+      win.document.close();
+    } else {
+      toast({
+        title: "Impossible d’imprimer",
+        description: "Veuillez autoriser les fenêtres pop-up pour lancer l’impression.",
+      });
+    }
   };
 
   // Generate calendar data for selected user (kept mock for now)
@@ -121,6 +230,30 @@ export const AttendanceReports: React.FC = () => {
     }
     return days;
   };
+
+  function getSignatureSrc(d: { return_signature?: string | null; return_signature_file_url?: string | null; signatureUrl?: string | null }) {
+    // Priority: explicit file URL -> dataURL in return_signature -> resolve signatureUrl
+    const fileFirst = d.return_signature_file_url ?? undefined;
+    const rawSig = d.return_signature ?? undefined;
+    // 1) If we have a file URL or relative path
+    const byFile = fileFirst ? resolveSignatureUrl(fileFirst) : null;
+    if (byFile) return byFile;
+    // 2) If raw signature is a data URL
+    if (rawSig && typeof rawSig === 'string' && rawSig.trim().startsWith('data:image')) return rawSig.trim();
+    // 3) If raw signature is plain base64
+    if (rawSig && typeof rawSig === 'string') {
+      const compact = rawSig.replace(/\s+/g, '');
+      if (/^[A-Za-z0-9+\/_=-]+$/.test(compact) && compact.length > 40) {
+        return `data:image/png;base64,${compact}`;
+      }
+    }
+    // 4) Fallback to legacy field if present
+    if (d.signatureUrl) {
+      const byLegacy = resolveSignatureUrl(d.signatureUrl);
+      if (byLegacy) return byLegacy;
+    }
+    return null;
+  }
 
   return (
     <div className="space-y-6">
@@ -176,57 +309,58 @@ export const AttendanceReports: React.FC = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="border rounded-lg">
-              <Table>
+            <div className="border rounded-lg overflow-x-auto print:overflow-visible">
+              <Table className="print:text-[12px] print:leading-tight print:table-fixed w-full">
                 <TableHeader>
-                  <TableRow>
-                    <TableHead>Employé</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Sortie</TableHead>
-                    <TableHead>Retour</TableHead>
-                    <TableHead>Motif</TableHead>
-                    <TableHead>Signature</TableHead>
+                  <TableRow className="bg-blue-100/100 print:bg-blue-200 print:text-[10px]">
+                    <TableHead className="whitespace-nowrap text-center px-1.5 py-1 print:px-0.5 print:py-0">Employé</TableHead>
+                    <TableHead className="whitespace-nowrap text-center px-1.5 py-1 print:px-0.5 print:py-0">Date</TableHead>
+                    <TableHead className="whitespace-nowrap text-center px-1.5 py-1 print:px-0.5 print:py-0">Sortie</TableHead>
+                    <TableHead className="whitespace-nowrap text-center px-1.5 py-1 print:px-0.5 print:py-0">Retour</TableHead>
+                    <TableHead className="whitespace-nowrap text-center px-1.5 py-1 print:px-0.5 print:py-0">Motif</TableHead>
+                    <TableHead className="whitespace-nowrap text-center px-1.5 py-1 print:px-0.5 print:py-0">Signature</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredRows.map((r) => (
-                    <TableRow key={r.id}>
-                      <TableCell className="font-medium">{r.employeeName}</TableCell>
-                      <TableCell>{new Date(r.date).toLocaleDateString('fr-FR')}</TableCell>
-                      <TableCell>{r.departure_time || '-'}</TableCell>
-                      <TableCell>{r.return_time || '-'}</TableCell>
-                      <TableCell>{r.reason || '-'}</TableCell>
-                      <TableCell>
-                        {(() => {
-                          let url = r.signatureUrl || '';
-                          if (!url) return '-';
-                          // Normalize url
-                          // 1) Direct data URL or absolute http(s)
-                          if (url.startsWith('data:image')) {
-                            // ok
-                          } else if (url.startsWith('http://') || url.startsWith('https://')) {
-                            // ok
-                          } else if (url.startsWith('/storage/')) {
-                            url = `${BACKEND_BASE}${url}`;
-                          } else if (url.startsWith('/')) {
-                            url = `${BACKEND_BASE}${url}`;
-                          } else if (url.startsWith('storage/')) {
-                            url = `${BACKEND_BASE}/${url}`;
-                          } else {
-                            // 2) Try base64-like (even if short)
-                            const base64Like = /^[A-Za-z0-9+/=]+$/.test(url);
-                            if (base64Like) {
-                              url = `data:image/png;base64,${url}`;
-                            } else {
-                              // Unknown format -> show checkmark
-                              return '✓';
-                            }
-                          }
-                          return (
-                            <a href={url} target="_blank" rel="noreferrer">
-                              <img src={url} alt="Signature" className="h-6 w-auto inline-block" />
-                            </a>
-                          );
+                  {loading && (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-6 print:py-2 text-muted-foreground">Chargement…</TableCell>
+                    </TableRow>
+                  )}
+                  {error && !loading && (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-6 print:py-2 text-destructive">{error}</TableCell>
+                    </TableRow>
+                  )}
+                  {!loading && !error && filteredRows.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-6 print:py-2 text-muted-foreground">Aucun enregistrement trouvé pour cette période</TableCell>
+                    </TableRow>
+                  )}
+                  {!loading && !error && filteredRows.map((r) => (
+                    <TableRow key={r.id} className="even:bg-muted/100 print:even:bg-gray-100 print:text-[10px]">
+                      <TableCell className="font-medium text-center px-1.5 py-1 print:px-0.5 print:py-0">{r.employeeName}</TableCell>
+                      <TableCell className="text-center px-1.5 py-1 print:px-0.5 print:py-0">{new Date(r.date).toLocaleDateString('fr-FR')}</TableCell>
+                      <TableCell className="text-center px-1.5 py-1 print:px-0.5 print:py-0">{r.departure_time || '-'}</TableCell>
+                      <TableCell className="text-center px-1.5 py-1 print:px-0.5 print:py-0">{r.return_time || '-'}</TableCell>
+                      <TableCell className="text-center px-1.5 py-1 print:px-0.5 print:py-0">{r.reason || '-'}</TableCell>
+                      <TableCell className="text-center px-1.5 py-1 print:px-0.5 print:py-0">
+                      {(() => {
+                          const src = getSignatureSrc(r);
+                          return src ? (
+                            <img
+                              src={src}
+                              alt="Signature"
+                              className="inline-block h-10 object-contain rounded print:h-4"
+                              onError={(e) => {
+                                if (r.return_signature && r.return_signature.startsWith('data:image') && e.currentTarget.src !== r.return_signature) {
+                                  e.currentTarget.src = r.return_signature;
+                                } else {
+                                  e.currentTarget.replaceWith(document.createTextNode('-'));
+                                }
+                              }}
+                            />
+                          ) : '-';
                         })()}
                       </TableCell>
                     </TableRow>
@@ -234,19 +368,6 @@ export const AttendanceReports: React.FC = () => {
                 </TableBody>
               </Table>
             </div>
-
-            {(!loading && !error && filteredRows.length === 0) && (
-              <div className="text-center py-8 text-muted-foreground">
-                <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>Aucun enregistrement trouvé pour cette période</p>
-              </div>
-            )}
-            {loading && (
-              <div className="text-center py-8 text-muted-foreground">Chargement…</div>
-            )}
-            {error && (
-              <div className="text-center py-8 text-destructive">{error}</div>
-            )}
           </CardContent>
         </Card>
       ) : (

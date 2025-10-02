@@ -396,7 +396,7 @@ export const DepartureTab: React.FC<DepartureTabProps> = ({ users, onUpdated }) 
                             <img
                               src={src}
                               alt="Signature"
-                              style={{ width: 100, height: 100, objectFit: 'contain', borderRadius: 4 }}
+                              style={{ width: 50, height: 50, objectFit: 'contain', borderRadius: 4 }}
                               onError={(e) => {
                                 if (d.return_signature && d.return_signature.startsWith('data:image') && e.currentTarget.src !== d.return_signature) {
                                   e.currentTarget.src = d.return_signature;

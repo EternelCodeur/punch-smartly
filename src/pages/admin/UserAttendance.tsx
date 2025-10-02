@@ -202,7 +202,7 @@ const UserAttendance: React.FC = () => {
                             e.inSignature.startsWith('http://') ||
                             e.inSignature.startsWith('https://')
                           ) ? (
-                            <img src={e.inSignature} alt="Signature arrivée" className="inline-block h-6 w-auto print:h-5" />
+                            <img src={e.inSignature} alt="Signature arrivée" className="inline-block h-6 w-auto print:h-6" />
                           ) : (
                             e.inSignature ? '✓' : '-'
                           )}
@@ -215,7 +215,7 @@ const UserAttendance: React.FC = () => {
                             e.outSignature.startsWith('http://') ||
                             e.outSignature.startsWith('https://')
                           ) ? (
-                            <img src={e.outSignature} alt="Signature départ" className="inline-block h-6 w-auto print:h-5" />
+                            <img src={e.outSignature} alt="Signature départ" className="inline-block h-6 w-auto print:h-6" />
                           ) : (
                             e.outSignature ? '✓' : '-'
                           )}

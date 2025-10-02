@@ -44,7 +44,9 @@ export type Attendance = {
 };
 
 async function http<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
-  const res = await fetch(input, init);
+  // Cookie-based auth; include credentials for cross-origin if needed
+  const mergedInit: RequestInit = { credentials: 'include', ...init, headers: { ...(init?.headers || {}) } };
+  const res = await fetch(input, mergedInit);
   if (!res.ok) {
     let msg = res.statusText;
     try {

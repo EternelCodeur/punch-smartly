@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/AuthContext";
 import { useLocation, useNavigate } from "react-router-dom";
+import { Eye, EyeOff } from "lucide-react";
 
 const Login: React.FC = () => {
   const { loginWithPassword } = useAuth();
@@ -11,6 +12,7 @@ const Login: React.FC = () => {
   const location = useLocation() as any;
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const onSubmit = async (e: React.FormEvent) => {
@@ -35,20 +37,30 @@ const Login: React.FC = () => {
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle>Connexion</CardTitle>
-          <CardDescription>Saisissez vos identifiants</CardDescription>
+          <CardDescription>Saisissez votre code secret</CardDescription>
         </CardHeader>
         <CardContent>
           <form className="space-y-4" onSubmit={onSubmit}>
             <div className="space-y-2">
-              <label className="text-sm font-medium">Code Secret</label>
-              <Input
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                autoComplete="current-password"
-              />
+              <div className="relative">
+                <Input
+                  type={showPassword ? "text" : "password"}
+                  placeholder="code secret"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  autoComplete="current-password"
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  aria-label={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+                >
+                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
+              </div>
             </div>
             {error && (
               <p className="text-sm text-destructive">{error}</p>
@@ -56,9 +68,6 @@ const Login: React.FC = () => {
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? "Connexion..." : "Se connecter"}
             </Button>
-            <div className="text-xs text-muted-foreground mt-2">
-              Démo: super123 • admin123 • user123
-            </div>
           </form>
         </CardContent>
       </Card>
