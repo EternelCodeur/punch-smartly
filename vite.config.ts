@@ -12,7 +12,7 @@ export default defineConfig(({ mode }) => ({
       "/api": {
         target: "https://archi-pointe.alwaysdata.net",
         changeOrigin: true,
-        secure: true,
+        secure: false,
       },
     },
   },

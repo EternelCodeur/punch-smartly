@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useMemo, useState } from "react";
+import { apiUrl } from "../lib/api";
 
 export type Role = "user" | "admin" | "superadmin";
 
@@ -94,7 +95,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const loginWithPassword = async (password: string) => {
-    const res = await fetch(`/api/login`, {
+    const res = await fetch(apiUrl(`/api/login`), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',

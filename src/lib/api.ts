@@ -43,10 +43,25 @@ export type Attendance = {
   check_out_signature?: string | null;
 };
 
+// Base URL configurable via Vite (vite.config.ts -> env VITE_API_BASE)
+// Example: VITE_API_BASE=https://api.example.com
+export const API_BASE: string = (import.meta as any)?.env?.VITE_API_BASE || '';
+
+function withApiBase(input: RequestInfo): RequestInfo {
+  if (typeof input === 'string' && input.startsWith('/api')) {
+    return `${API_BASE}${input}`;
+  }
+  return input;
+}
+
+export function apiUrl(path: string): string {
+  return path.startsWith('/api') ? `${API_BASE}${path}` : path;
+}
+
 async function http<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
   // Cookie-based auth; include credentials for cross-origin if needed
   const mergedInit: RequestInit = { credentials: 'include', ...init, headers: { ...(init?.headers || {}) } };
-  const res = await fetch(input, mergedInit);
+  const res = await fetch(withApiBase(input), mergedInit);
   if (!res.ok) {
     let msg = res.statusText;
     try {
@@ -85,7 +100,7 @@ export async function updateEmploye(id: number, payload: Partial<Employe>): Prom
 }
 
 export async function deleteEmploye(id: number): Promise<void> {
-  const res = await fetch(`/api/employes/${id}`, { method: 'DELETE' });
+  const res = await fetch(withApiBase(`/api/employes/${id}`), { method: 'DELETE', credentials: 'include' });
   if (res.status === 404) {
     // Treat missing resource as already deleted (idempotent delete)
     return;
@@ -212,7 +227,7 @@ export async function updateTemporaryDeparture(id: number, payload: Partial<Pick
 }
 
 export async function deleteTemporaryDeparture(id: number): Promise<void> {
-  const res = await fetch(`/api/temporary-departures/${id}`, { method: 'DELETE' });
+  const res = await fetch(withApiBase(`/api/temporary-departures/${id}`), { method: 'DELETE', credentials: 'include' });
   if (!res.ok && res.status !== 204 && res.status !== 404) {
     try {
       const j = await res.json();
