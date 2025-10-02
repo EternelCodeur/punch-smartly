@@ -4,7 +4,36 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { getAttendanceSummary, getEmploye, type Employe, type AttendanceSummary } from "@/lib/api";
+
+// Inline API calls (no lib/api)
+type AttendanceSummary = {
+  perDay: Array<{
+    date: string;
+    in?: string | null;
+    out?: string | null;
+    inSignature?: string | null;
+    outSignature?: string | null;
+    mins: number;
+  }>;
+  monthMins: number;
+};
+
+async function authFetch(input: RequestInfo, init?: RequestInit) {
+  const headers: Record<string, string> = { ...(init?.headers as any) };
+  return fetch(input, { credentials: 'include', ...init, headers });
+}
+
+async function apiGetEmploye(id: number): Promise<{ first_name: string; last_name: string; position?: string | null; }>{
+  const res = await authFetch(`/api/employes/${id}`);
+  if (!res.ok) throw new Error('Chargement employé impossible');
+  return res.json();
+}
+
+async function apiGetAttendanceSummary(employeId: number, monthStr: string): Promise<AttendanceSummary> {
+  const res = await authFetch(`/api/attendances/summary/${employeId}`);
+  if (!res.ok) throw new Error('Chargement résumé impossible');
+  return res.json();
+}
 
 function formatHours(mins: number) {
   const h = Math.floor(mins / 60);
@@ -53,7 +82,7 @@ const UserAttendance: React.FC = () => {
       if (!id) return;
       if (empName && empPosition !== undefined) return; // déjà fournis via state
       try {
-        const emp = await getEmploye(Number(id));
+        const emp = await apiGetEmploye(Number(id));
         if (!alive) return;
         setEmpName(`${emp.first_name} ${emp.last_name}`);
         setEmpPosition(emp.position ?? '');
@@ -79,7 +108,7 @@ const UserAttendance: React.FC = () => {
           return;
         }
         const monthStr = `${year}-${String(monthIndex+1).padStart(2,'0')}`;
-        const data = await getAttendanceSummary(Number(id), monthStr);
+        const data = await apiGetAttendanceSummary(Number(id), monthStr);
         if (alive) setSummary(data);
       } catch (e: any) {
         if (alive) setError(e?.message || 'Chargement impossible');
