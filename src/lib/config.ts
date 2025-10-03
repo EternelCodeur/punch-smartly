@@ -24,7 +24,7 @@ export const CHECKOUT_START_MIN = parseTimeToMinutes(
   12 * 60
 );
 
-export const REFRESH_MS = Number((import.meta as any).env?.VITE_REFRESH_MS ?? 30000);
+export const REFRESH_MS = Number((import.meta as any).env?.VITE_REFRESH_MS ?? 300000);
 
 export function getNowMinutes(): number {
   const d = new Date();
