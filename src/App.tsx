@@ -15,7 +15,8 @@ import SuperAdmin from "./pages/SuperAdmin";
 const queryClient = new QueryClient();
 
 const HomeRedirect = () => {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, hydrating } = useAuth();
+  if (hydrating) return null; // wait initial session hydration
   if (!isAuthenticated || !user) return <Navigate to="/login" replace />;
   const path = user.role === "superadmin" ? "/superadmin" : user.role === "admin" ? "/admin" : "/pointage";
   return <Navigate to={path} replace />;

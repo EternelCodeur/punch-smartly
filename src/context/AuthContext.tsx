@@ -9,8 +9,9 @@ export type AuthUser = {
 type AuthContextType = {
   user: AuthUser | null;
   isAuthenticated: boolean;
+  hydrating: boolean;
   logout: () => void;
-  loginWithPassword: (password: string) => Promise<void>;
+  loginWithPassword: (password: string, remember?: boolean) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -18,7 +19,19 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const STORAGE_KEY = "punch-smartly_auth";
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<AuthUser | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(() => {
+    // Hydrate synchronously from localStorage to survive hard refresh
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed.username === 'string' && parsed.role) {
+        return parsed as AuthUser;
+      }
+    } catch {}
+    return null;
+  });
+  const [hydrating, setHydrating] = useState<boolean>(true);
 
   useEffect(() => {
     // Hydrater depuis l'API (/api/me) avec credentials
@@ -34,6 +47,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           localStorage.setItem(STORAGE_KEY, JSON.stringify(nextUser));
         }
       } catch {}
+      finally {
+        setHydrating(false);
+      }
     })();
   }, []);
 
@@ -44,12 +60,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem(STORAGE_KEY);
   };
 
-  const loginWithPassword = async (password: string) => {
+  const loginWithPassword = async (password: string, remember: boolean = false) => {
     const res = await fetch(`/api/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ password }),
+      body: JSON.stringify({ password, remember }),
     });
     if (!res.ok) {
       let msg = 'Identifiants invalides';
@@ -87,9 +103,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const value = useMemo<AuthContextType>(() => ({
     user,
     isAuthenticated: !!user,
+    hydrating,
     logout,
     loginWithPassword,
-  }), [user]);
+  }), [user, hydrating]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

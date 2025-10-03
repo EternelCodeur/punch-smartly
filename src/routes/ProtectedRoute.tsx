@@ -8,8 +8,13 @@ interface ProtectedRouteProps {
 }
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allow, redirectTo = "/login" }) => {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, hydrating } = useAuth();
   const location = useLocation();
+
+  // Attendre l'hydratation pour éviter une redirection prématurée
+  if (hydrating) {
+    return null; // ou un indicateur de chargement
+  }
 
   if (!isAuthenticated || !user) {
     return <Navigate to={redirectTo} replace state={{ from: location }} />;

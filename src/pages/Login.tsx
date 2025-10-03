@@ -12,6 +12,7 @@ const Login: React.FC = () => {
   const location = useLocation() as any;
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [remember, setRemember] = useState<boolean>(true);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -20,7 +21,7 @@ const Login: React.FC = () => {
     setError(null);
     setLoading(true);
     try {
-      await loginWithPassword(password);
+      await loginWithPassword(password, remember);
       // redirect to previous page or home redirect (role-based)
       const from = location.state?.from?.pathname as string | undefined;
       if (from) return navigate(from, { replace: true });
@@ -61,6 +62,14 @@ const Login: React.FC = () => {
                   {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                 </button>
               </div>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={remember}
+                  onChange={(e) => setRemember(e.target.checked)}
+                />
+                Se souvenir de moi
+              </label>
             </div>
             {error && (
               <p className="text-sm text-destructive">{error}</p>
