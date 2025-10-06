@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { UserManagement } from './user-management';
@@ -19,6 +20,9 @@ export const AdminDashboard: React.FC = () => {
   const [counts, setCounts] = useState<TodayCounts | null>(null);
   const [countsLoading, setCountsLoading] = useState(false);
   const [countsError, setCountsError] = useState<string | null>(null);
+  const [presentDialogOpen, setPresentDialogOpen] = useState(false);
+  const [absentDialogOpen, setAbsentDialogOpen] = useState(false);
+  const [leftDialogOpen, setLeftDialogOpen] = useState(false);
 
   // Date/heure locales d'affichage
   const currentTime = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
@@ -95,6 +99,33 @@ export const AdminDashboard: React.FC = () => {
 
   const totalEmployees = filteredEmps.length;
 
+  // Employés présents aujourd'hui (arrivés et pas encore partis)
+  const presentEmployees = useMemo(() => {
+    return filteredEmps.filter(e => {
+      const isToday = e.attendance_date === todayStr;
+      const arrived = !!e.arrival_signed;
+      const notLeft = !e.departure_signed;
+      return isToday && arrived && notLeft;
+    });
+  }, [filteredEmps, todayStr]);
+
+  // Employés déjà partis aujourd'hui (check-out fait aujourd'hui)
+  const leftEmployees = useMemo(() => {
+    return filteredEmps.filter(e => {
+      const isToday = e.attendance_date === todayStr;
+      return isToday && !!e.departure_signed;
+    });
+  }, [filteredEmps, todayStr]);
+
+  // Employés absents aujourd'hui (aucun check-in aujourd'hui)
+  const absentEmployees = useMemo(() => {
+    return filteredEmps.filter(e => {
+      const isToday = e.attendance_date === todayStr;
+      const arrived = !!e.arrival_signed;
+      return !(isToday && arrived);
+    });
+  }, [filteredEmps, todayStr]);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -113,6 +144,96 @@ export const AdminDashboard: React.FC = () => {
         ) : null}
       </div>
 
+      {/* Dialog: Liste des présents aujourd'hui */}
+      <Dialog open={presentDialogOpen} onOpenChange={setPresentDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Employés présents aujourd'hui</DialogTitle>
+            <DialogDescription>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 max-h-[60vh] overflow-auto">
+            {presentEmployees.length === 0 ? (
+              <p className="text-center text-muted-foreground">Aucun employé présent pour le moment.</p>
+            ) : (
+              <ul className="divide-y divide-border rounded-md border">
+                {presentEmployees.map(emp => (
+                  <li key={emp.id} className="p-3 flex items-center justify-between">
+                    <div>
+                      <p className="font-medium">{emp.first_name} {emp.last_name}</p>
+                      {emp.position ? (
+                        <p className="text-sm text-muted-foreground">{emp.position}</p>
+                      ) : null}
+                    </div>
+                    <span className="text-xs text-success">Présent</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Liste des absents aujourd'hui */}
+      <Dialog open={absentDialogOpen} onOpenChange={setAbsentDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Employés absents aujourd'hui</DialogTitle>
+            <DialogDescription>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 max-h-[60vh] overflow-auto">
+            {absentEmployees.length === 0 ? (
+              <p className="text-center text-muted-foreground">Aucun employé absent pour le moment.</p>
+            ) : (
+              <ul className="divide-y divide-border rounded-md border">
+                {absentEmployees.map(emp => (
+                  <li key={emp.id} className="p-3 flex items-center justify-between">
+                    <div>
+                      <p className="font-medium">{emp.first_name} {emp.last_name}</p>
+                      {emp.position ? (
+                        <p className="text-sm text-muted-foreground">{emp.position}</p>
+                      ) : null}
+                    </div>
+                    <span className="text-xs text-destructive">Absent</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Liste des employés déjà partis aujourd'hui */}
+      <Dialog open={leftDialogOpen} onOpenChange={setLeftDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Employés déjà partis</DialogTitle>
+            <DialogDescription>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 max-h-[60vh] overflow-auto">
+            {leftEmployees.length === 0 ? (
+              <p className="text-center text-muted-foreground">Aucun employé n'a encore quitté aujourd'hui.</p>
+            ) : (
+              <ul className="divide-y divide-border rounded-md border">
+                {leftEmployees.map(emp => (
+                  <li key={emp.id} className="p-3 flex items-center justify-between">
+                    <div>
+                      <p className="font-medium">{emp.first_name} {emp.last_name}</p>
+                      {emp.position ? (
+                        <p className="text-sm text-muted-foreground">{emp.position}</p>
+                      ) : null}
+                    </div>
+                    <span className="text-xs text-blue-700">Parti</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Statistics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <Card>
@@ -124,8 +245,14 @@ export const AdminDashboard: React.FC = () => {
               <div className="text-2xl font-bold">{totalEmployees}</div>
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <Card
+              className="pb-2 cursor-pointer hover:bg-accent/30 rounded-md"
+              onClick={() => setPresentDialogOpen(true)}
+              title="Voir la liste des présents aujourd'hui"
+              >
+            <CardHeader
+              className="flex flex-row items-center justify-between space-y-0 pb-2 cursor-pointer hover:bg-accent/30 rounded-md"
+            >
               <CardTitle className="text-sm font-medium">Présents aujourd'hui</CardTitle>
               <CheckCircle className="h-4 w-4 text-success" />
             </CardHeader>
@@ -139,8 +266,14 @@ export const AdminDashboard: React.FC = () => {
               )}
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <Card
+              className="pb-2 cursor-pointer hover:bg-accent/30 rounded-md"
+              onClick={() => setAbsentDialogOpen(true)}
+              title="Voir la liste des absents aujourd'hui"
+              >
+            <CardHeader
+              className="flex flex-row items-center justify-between space-y-0 pb-2 cursor-pointer hover:bg-accent/30 rounded-md"
+            >
               <CardTitle className="text-sm font-medium">Absents aujourd'hui</CardTitle>
               <XCircle className="h-4 w-4 text-destructive" />
             </CardHeader>
@@ -154,8 +287,14 @@ export const AdminDashboard: React.FC = () => {
               )}
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <Card
+              className="pb-2 cursor-pointer hover:bg-accent/30 rounded-md"
+              onClick={() => setLeftDialogOpen(true)}
+              title="Voir la liste des employés déjà partis"
+              >
+            <CardHeader
+              className="flex flex-row items-center justify-between space-y-0 pb-2 cursor-pointer hover:bg-accent/30 rounded-md"
+            >
               <CardTitle className="text-sm font-medium">Déjà partie</CardTitle>
               <XCircle className="h-4 w-4 text-blue-700" />
             </CardHeader>

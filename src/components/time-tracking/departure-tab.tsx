@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { SignatureCanvas } from '@/components/ui/signature-canvas';
-import { LogOut, LogIn } from 'lucide-react';
+import { LogOut, LogIn, AlertCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { listEmployes, type Employe, listTemporaryDepartures, createTemporaryDeparture, markTemporaryDepartureReturn, type TemporaryDeparture } from '@/lib/api';
 import { CHECKOUT_START_MIN, getNowMinutes } from '@/lib/config';
@@ -43,6 +43,20 @@ export const DepartureTab: React.FC<DepartureTabProps> = ({ users, onUpdated }) 
   const [saving, setSaving] = useState(false);
   const [monthDeps, setMonthDeps] = useState<TemporaryDeparture[]>([]);
   const [depsLoading, setDepsLoading] = useState(false);
+  // Reason builder state
+  const [reasonType, setReasonType] = useState<'rendezvous' | 'urgence' | 'prospection' | 'autre' | null>(null);
+  const [clientName, setClientName] = useState('');
+  const [otherReason, setOtherReason] = useState('');
+
+  // Build the final reason string from the selection and inputs
+  useEffect(() => {
+    let built = '';
+    if (reasonType === 'rendezvous') built = 'Rendez-vous professionnel';
+    else if (reasonType === 'urgence') built = 'Urgence familiale';
+    else if (reasonType === 'prospection') built = clientName ? `Prospection client – ${clientName}` : 'Prospection client';
+    else if (reasonType === 'autre') built = otherReason.trim();
+    setFormData(prev => ({ ...prev, reason: built }));
+  }, [reasonType, clientName, otherReason]);
 
   // Recherche à la demande
   const [selectedEmp, setSelectedEmp] = useState<{ id: string; firstName: string; lastName: string; position: string } | null>(null);
@@ -118,6 +132,13 @@ export const DepartureTab: React.FC<DepartureTabProps> = ({ users, onUpdated }) 
     reloadMonth();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [monthStr]);
+
+  // Limiter l'affichage aux employés de l'entreprise connectée (via la prop users)
+  const filteredMonthDeps = React.useMemo(() => {
+    if (!users || users.length === 0) return [] as TemporaryDeparture[];
+    const allowedIds = new Set(users.map(u => Number(u.id)));
+    return monthDeps.filter(d => allowedIds.has(Number(d.employe_id)) || (d.employe && allowedIds.has(Number(d.employe.id))));
+  }, [monthDeps, users]);
 
   const handleSearch = async () => {
     const q = formData.lastName.trim().toLowerCase();
@@ -264,7 +285,12 @@ export const DepartureTab: React.FC<DepartureTabProps> = ({ users, onUpdated }) 
         variant: 'default',
       });
       setIsSignatureModalOpen(false);
-      if (actionType === 'departure') { setFormData(prev => ({ ...prev, reason: '' })); }
+      if (actionType === 'departure') {
+        setFormData(prev => ({ ...prev, reason: '' }));
+        setReasonType(null);
+        setClientName('');
+        setOtherReason('');
+      }
       onUpdated?.();
     } catch (e: any) {
       toast({ title: 'Erreur', description: e?.message || 'Enregistrement impossible', variant: 'destructive' });
@@ -286,7 +312,7 @@ export const DepartureTab: React.FC<DepartureTabProps> = ({ users, onUpdated }) 
           </CardDescription>
         </CardHeader>
         <CardContent className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-1 gap-6">
             <div className="space-y-4">
               <div>
                 <Label htmlFor="lastName">Nom ou Prénom *</Label>
@@ -319,20 +345,88 @@ export const DepartureTab: React.FC<DepartureTabProps> = ({ users, onUpdated }) 
                     ))}
                   </div>
                 )}
+                
               </div>
             </div>
             
             <div className="space-y-4">
+                {selectedEmp && (
+                  <div className="mt-2 flex items-start gap-2 rounded border border-orange-200 bg-orange-50 p-2 animate-pulse">
+                    <AlertCircle className="h-4 w-4 text-orange-600 mt-0.5" />
+                    <div className="text-xs text-orange-800">
+                      <p className="font-medium">Action requise</p>
+                      <p>
+                        Veuillez choisir une carte ci-dessous pour indiquer le motif de votre sortie. 
+                        Si vous sélectionnez « Prospection client », renseignez aussi le nom du client.
+                      </p>
+                    </div>
+                  </div>
+                )}
               {selectedEmp && (
-                <div>
-                  <Label htmlFor="reason">Motif de sortie</Label>
-                  <Textarea
-                    id="reason"
-                    value={formData.reason}
-                    onChange={(e) => handleInputChange('reason', e.target.value)}
-                    placeholder="Précisez le motif de votre sortie..."
-                    rows={3}
-                  />
+                <div className="space-y-3">
+                  <Label>Motif de sortie</Label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      className={`border rounded p-3 text-left hover:bg-accent ${reasonType==='rendezvous' ? 'ring-2 ring-primary' : ''}`}
+                      onClick={() => setReasonType('rendezvous')}
+                    >
+                      <p className="font-medium">Rendez-vous professionnel</p>
+                      <p className="text-xs text-muted-foreground">Déplacement lié au travail</p>
+                    </button>
+                    <button
+                      type="button"
+                      className={`border rounded p-3 text-left hover:bg-accent ${reasonType==='urgence' ? 'ring-2 ring-primary' : ''}`}
+                      onClick={() => setReasonType('urgence')}
+                    >
+                      <p className="font-medium">Urgence familiale</p>
+                      <p className="text-xs text-muted-foreground">Situation urgente à domicile</p>
+                    </button>
+                    <div
+                      className={`border rounded p-3 ${reasonType==='prospection' ? 'ring-2 ring-primary' : ''}`}
+                    >
+                      <button
+                        type="button"
+                        className="w-full text-left hover:bg-accent rounded p-1"
+                        onClick={() => setReasonType('prospection')}
+                      >
+                        <p className="font-medium">Prospection client</p>
+                        <p className="text-xs text-muted-foreground">Visite/relance client</p>
+                      </button>
+                      {reasonType === 'prospection' && (
+                        <div className="mt-2">
+                          <Label htmlFor="clientName" className="text-xs">Nom du client</Label>
+                          <Input
+                            id="clientName"
+                            placeholder="Ex: Société ABC"
+                            value={clientName}
+                            onChange={(e) => setClientName(e.target.value)}
+                          />
+                          <p className="text-xs text-muted-foreground mt-1">Sera inclus dans le motif</p>
+                        </div>
+                      )}
+                    </div>
+                    <div className={`border rounded p-3 ${reasonType==='autre' ? 'ring-2 ring-primary' : ''}`}>
+                      <button
+                        type="button"
+                        className="w-full text-left hover:bg-accent rounded p-1"
+                        onClick={() => setReasonType('autre')}
+                      >
+                        <p className="font-medium">Autre</p>
+                        <p className="text-xs text-muted-foreground">Saisir un motif personnalisé</p>
+                      </button>
+                      {reasonType === 'autre' && (
+                        <div className="mt-2">
+                          <Textarea
+                            placeholder="Décrivez le motif..."
+                            rows={3}
+                            value={otherReason}
+                            onChange={(e) => setOtherReason(e.target.value)}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -353,8 +447,8 @@ export const DepartureTab: React.FC<DepartureTabProps> = ({ users, onUpdated }) 
         </CardContent>
       </Card>
 
-      {/* Tableau des sorties du mois (backend) */}
-      {monthDeps.length > 0 && (
+      {/* Tableau des sorties du mois (uniquement entreprise connectée) */}
+      {filteredMonthDeps.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -381,7 +475,7 @@ export const DepartureTab: React.FC<DepartureTabProps> = ({ users, onUpdated }) 
                   </tr>
                 </thead>
                 <tbody>
-                  {monthDeps.map((d) => (
+                  {filteredMonthDeps.map((d) => (
                     <tr key={d.id} className="border-b last:border-b-0">
                       <td className="py-2 pr-4">{d.employe ? `${d.employe.first_name} ${d.employe.last_name}` : `#${d.employe_id}`}</td>
                       <td className="py-2 pr-4">{formatDate(d.date)}</td>

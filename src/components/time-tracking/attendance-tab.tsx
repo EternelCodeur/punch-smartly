@@ -52,7 +52,6 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({ users, onUpdated }
       });
       return;
     }
-    
     setSelectedUser(user);
     setIsSignatureModalOpen(true);
   };
@@ -70,6 +69,10 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({ users, onUpdated }
       setIsSignatureModalOpen(false);
       setSelectedUser(null);
       onUpdated?.();
+      // Reload the page shortly after to reflect the latest state
+      setTimeout(() => {
+        window.location.reload();
+      }, 500);
     } catch (e: any) {
       toast({ title: 'Erreur', description: e?.message || 'Enregistrement impossible', variant: 'destructive' });
     } finally {
