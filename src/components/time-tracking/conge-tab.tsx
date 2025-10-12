@@ -29,6 +29,7 @@ const permissions: Permission[] = [
   { title: "Décès du conjoit(e), du Pére, de la Mère", duration: '5 jours', justification: 'Acte de décès', icon: HeartCrack },
   { title: 'Décès de la belle Mère ou du beau Pére', duration: '2 jours', justification: 'Acte de décès', icon: Skull },
   { title: 'Accident ou maladie Enfant ou Conjoint(e)', duration: '15 jours', justification: 'Bulletin médical', icon: Activity },
+  { title: 'Maladie', duration: '3 jours', justification: 'Bulletin médical', icon: Activity },
   { title: 'Ceremonie Réligieuse', duration: '1 jour', justification: 'Document officiel', icon: Award },
 ];
 
