@@ -59,6 +59,9 @@ export const DepartureListTab: React.FC<DepartureListTabProps> = ({ users, onUpd
       setIsSignatureModalOpen(false);
       setSelectedUser(null);
       onUpdated?.();
+      setTimeout(() => {
+        window.location.reload();
+      }, 100);
     } catch (e: any) {
       toast({ title: 'Erreur', description: e?.message || 'Enregistrement impossible', variant: 'destructive' });
     } finally {

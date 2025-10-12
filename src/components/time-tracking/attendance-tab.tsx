@@ -72,7 +72,7 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({ users, onUpdated }
       // Reload the page shortly after to reflect the latest state
       setTimeout(() => {
         window.location.reload();
-      }, 500);
+      }, 100);
     } catch (e: any) {
       toast({ title: 'Erreur', description: e?.message || 'Enregistrement impossible', variant: 'destructive' });
     } finally {

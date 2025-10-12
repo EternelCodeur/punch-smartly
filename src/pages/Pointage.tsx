@@ -7,9 +7,10 @@ import { DepartureListTab } from '@/components/time-tracking/departure-list-tab'
 import { Clock, Users, LogIn, LogOut } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useEmployes } from '@/hooks/use-employes';
-import { listAttendances, Attendance } from '@/lib/api';
+import { listAttendances, Attendance, listAbsences, Absence } from '@/lib/api';
 import { REFRESH_MS } from '@/lib/config';
 import { DepartureTab } from '@/components/time-tracking/departure-tab';
+import { CongesTab } from '@/components/time-tracking/conge-tab';
 
 const Pointage: React.FC = () => {
   const { logout, user } = useAuth();
@@ -26,6 +27,9 @@ const Pointage: React.FC = () => {
   const [attendances, setAttendances] = useState<Attendance[]>([]);
   const [attLoading, setAttLoading] = useState<boolean>(false);
   const [attError, setAttError] = useState<string | null>(null);
+  const [absences, setAbsences] = useState<Absence[]>([]);
+  const [absLoading, setAbsLoading] = useState<boolean>(false);
+  const [absError, setAbsError] = useState<string | null>(null);
 
   const todayStr = useMemo(() => {
     const d = new Date();
@@ -45,44 +49,60 @@ const Pointage: React.FC = () => {
     return () => { alive = false; };
   }, [todayStr]);
 
+  const reloadAbsences = useCallback(() => {
+    let alive = true;
+    setAbsLoading(true);
+    listAbsences({ from: todayStr, to: todayStr, per_page: 0 })
+      .then((rows) => { if (alive) { setAbsences(rows); setAbsError(null); } })
+      .catch((e) => { if (alive) setAbsError(e?.message || 'Erreur de chargement des absences'); })
+      .finally(() => { if (alive) setAbsLoading(false); });
+    return () => { alive = false; };
+  }, [todayStr]);
+
   useEffect(() => {
-    const cancel = reloadAttendances();
-    return cancel;
-  }, [reloadAttendances]);
+    const cancel1 = reloadAttendances();
+    const cancel2 = reloadAbsences();
+    return () => { cancel1(); cancel2(); };
+  }, [reloadAttendances, reloadAbsences]);
 
   // Auto-refresh attendances at interval
   useEffect(() => {
     const id = setInterval(() => {
       reloadAttendances();
+      reloadAbsences();
     }, REFRESH_MS);
     return () => clearInterval(id);
-  }, [reloadAttendances]);
+  }, [reloadAttendances, reloadAbsences]);
 
   const checkedInIds = useMemo(() => new Set(attendances.filter(a => !!a.check_in_at).map(a => String(a.employe_id))), [attendances]);
   const checkedOutIds = useMemo(() => new Set(attendances.filter(a => !!a.check_out_at).map(a => String(a.employe_id))), [attendances]);
 
   // Prefer backend flags on employes; fallback to attendance sets
+  const absenceIds = useMemo(() => new Set(absences.map(a => String(a.employe_id))), [absences]);
+
   const arrivalUsers = useMemo(() => {
     const empMap = new Map((emps || []).map(e => [String(e.id), e]));
     return users.filter(u => {
+      if (absenceIds.has(u.id)) return false; // exclure si en congé aujourd'hui
       const e = empMap.get(u.id);
       if (e && e.attendance_date === todayStr) {
         return !e.arrival_signed; // show only those without arrival signed today
       }
       return !checkedInIds.has(u.id);
     });
-  }, [users, emps, checkedInIds, todayStr]);
+  }, [users, emps, checkedInIds, todayStr, absenceIds]);
 
   const departureUsers = useMemo(() => {
     const empMap = new Map((emps || []).map(e => [String(e.id), e]));
     return users.filter(u => {
+      if (absenceIds.has(u.id)) return false; // exclure si en congé aujourd'hui
       const e = empMap.get(u.id);
       if (e && e.attendance_date === todayStr) {
         return !!e.arrival_signed && !e.departure_signed; // ready for departure, not yet signed
       }
       return checkedInIds.has(u.id) && !checkedOutIds.has(u.id);
     });
-  }, [users, emps, checkedInIds, checkedOutIds, todayStr]);
+  }, [users, emps, checkedInIds, checkedOutIds, todayStr, absenceIds]);
 
   const waitingDepartureCount = useMemo(() => {
     return (emps || []).filter(e => e.attendance_date === todayStr && e.arrival_signed && !e.departure_signed).length;
@@ -124,7 +144,7 @@ const Pointage: React.FC = () => {
         <div className="max-w-6xl mx-auto">
           <Tabs defaultValue="attendance" className="space-y-6">
             <div className="flex justify-center">
-              <TabsList className="grid w-full max-w-md grid-cols-3">
+              <TabsList className="grid w-full max-w-2xl grid-cols-4">
                 <TabsTrigger value="attendance" className="flex items-center gap-2">
                   <LogIn className="h-4 w-4" />
                   Fiche d'Arrivée
@@ -142,6 +162,10 @@ const Pointage: React.FC = () => {
                 <TabsTrigger value="waiting" className="flex items-center gap-2">
                   <LogIn className="h-4 w-4" />
                   Fiche de Sortie
+                </TabsTrigger>
+                <TabsTrigger value="conges" className="flex items-center gap-2">
+                  <LogIn className="h-4 w-4" />
+                  Congés & Permisions
                 </TabsTrigger>
               </TabsList>
             </div>
@@ -169,12 +193,19 @@ const Pointage: React.FC = () => {
                 <DepartureTab users={departureUsers} onUpdated={() => { reloadAttendances(); }} />
               )}
             </TabsContent>
+
+            <TabsContent value="conges">
+              {(loading) && <div className="p-4 text-center text-muted-foreground">Chargement des données...</div>}
+              {(error) && <div className="p-4 text-center text-destructive">{error}</div>}
+              {!loading && !error && (
+                <CongesTab users={users} />
+              )}
+            </TabsContent>
           </Tabs>
 
           {/*<div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-8">
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
                   <Clock className="h-5 w-5 text-primary" />
                   Horaires de pointage
                 </CardTitle>

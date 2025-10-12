@@ -44,19 +44,22 @@ export const DepartureTab: React.FC<DepartureTabProps> = ({ users, onUpdated }) 
   const [monthDeps, setMonthDeps] = useState<TemporaryDeparture[]>([]);
   const [depsLoading, setDepsLoading] = useState(false);
   // Reason builder state
-  const [reasonType, setReasonType] = useState<'rendezvous' | 'urgence' | 'prospection' | 'autre' | null>(null);
+  const [reasonType, setReasonType] = useState<'rendezvous' | 'urgence' | 'prospection' | 'autre' | 'demarche' | null>(null);
   const [clientName, setClientName] = useState('');
+  const [endroitName, setEndroitName] = useState('');
+  const [urgenceName, setUrgenceName] = useState('');
   const [otherReason, setOtherReason] = useState('');
 
   // Build the final reason string from the selection and inputs
   useEffect(() => {
     let built = '';
     if (reasonType === 'rendezvous') built = 'Rendez-vous professionnel';
-    else if (reasonType === 'urgence') built = 'Urgence familiale';
+    else if (reasonType === 'urgence') built = urgenceName ? `Urgence familiale – ${urgenceName}` : 'Urgence familiale';
     else if (reasonType === 'prospection') built = clientName ? `Prospection client – ${clientName}` : 'Prospection client';
+    else if (reasonType === 'demarche') built = endroitName ? `Demarche administratif – ${endroitName}` : 'Demarche administratif';
     else if (reasonType === 'autre') built = otherReason.trim();
     setFormData(prev => ({ ...prev, reason: built }));
-  }, [reasonType, clientName, otherReason]);
+  }, [reasonType, clientName, endroitName, otherReason, urgenceName]);
 
   // Recherche à la demande
   const [selectedEmp, setSelectedEmp] = useState<{ id: string; firstName: string; lastName: string; position: string } | null>(null);
@@ -289,6 +292,7 @@ export const DepartureTab: React.FC<DepartureTabProps> = ({ users, onUpdated }) 
         setFormData(prev => ({ ...prev, reason: '' }));
         setReasonType(null);
         setClientName('');
+        setEndroitName('');
         setOtherReason('');
       }
       onUpdated?.();
@@ -366,22 +370,50 @@ export const DepartureTab: React.FC<DepartureTabProps> = ({ users, onUpdated }) 
                 <div className="space-y-3">
                   <Label>Motif de sortie</Label>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <button
-                      type="button"
-                      className={`border rounded p-3 text-left hover:bg-accent ${reasonType==='rendezvous' ? 'ring-2 ring-primary' : ''}`}
-                      onClick={() => setReasonType('rendezvous')}
-                    >
-                      <p className="font-medium">Rendez-vous professionnel</p>
-                      <p className="text-xs text-muted-foreground">Déplacement lié au travail</p>
-                    </button>
-                    <button
-                      type="button"
-                      className={`border rounded p-3 text-left hover:bg-accent ${reasonType==='urgence' ? 'ring-2 ring-primary' : ''}`}
-                      onClick={() => setReasonType('urgence')}
-                    >
-                      <p className="font-medium">Urgence familiale</p>
-                      <p className="text-xs text-muted-foreground">Situation urgente à domicile</p>
-                    </button>
+                    <div className={`border rounded p-3 ${reasonType==='demarche' ? 'ring-2 ring-primary' : ''}`}>
+                      <button
+                        type="button"
+                        className="w-full text-left hover:bg-accent rounded p-1"
+                        onClick={() => setReasonType('demarche')}
+                      >
+                        <p className="font-medium">Démarche administratif</p>
+                        <p className="text-xs text-muted-foreground">Situation urgente à domicile</p>
+                      </button>
+                      {reasonType === 'demarche' && (
+                        <div className="mt-2">
+                          <Label htmlFor="endroitName" className="text-xs">Endroit</Label>
+                          <Input
+                            id="endroitName"
+                            placeholder="Ex: Maladie parent"
+                            value={endroitName}
+                            onChange={(e) => setEndroitName(e.target.value)}
+                          />
+                          <p className="text-xs text-muted-foreground mt-1">Sera inclus dans le motif</p>
+                        </div>
+                      )}
+                    </div>
+                    <div className={`border rounded p-3 ${reasonType==='urgence' ? 'ring-2 ring-primary' : ''}`}>
+                      <button
+                        type="button"
+                        className="w-full text-left hover:bg-accent rounded p-1"
+                        onClick={() => setReasonType('urgence')}
+                      >
+                        <p className="font-medium">Urgence familiale</p>
+                        <p className="text-xs text-muted-foreground">Situation urgente à domicile</p>
+                      </button>
+                      {reasonType === 'urgence' && (
+                        <div className="mt-2">
+                          <Label htmlFor="urgenceName" className="text-xs">Motif</Label>
+                          <Input
+                            id="urgenceName"
+                            placeholder="Ex: Maladie parent"
+                            value={urgenceName}
+                            onChange={(e) => setUrgenceName(e.target.value)}
+                          />
+                          <p className="text-xs text-muted-foreground mt-1">Sera inclus dans le motif</p>
+                        </div>
+                      )}
+                    </div>
                     <div
                       className={`border rounded p-3 ${reasonType==='prospection' ? 'ring-2 ring-primary' : ''}`}
                     >
@@ -426,6 +458,14 @@ export const DepartureTab: React.FC<DepartureTabProps> = ({ users, onUpdated }) 
                         </div>
                       )}
                     </div>
+                    <button
+                      type="button"
+                      className={`border rounded p-3 text-left hover:bg-accent ${reasonType==='rendezvous' ? 'ring-2 ring-primary' : ''}`}
+                      onClick={() => setReasonType('rendezvous')}
+                    >
+                      <p className="font-medium">Rendez-vous professionnel</p>
+                      <p className="text-xs text-muted-foreground">Déplacement lié au travail</p>
+                    </button>
                   </div>
                 </div>
               )}

@@ -13,14 +13,33 @@ type AttendanceSummary = {
     out?: string | null;
     inSignature?: string | null;
     outSignature?: string | null;
+    onField?: boolean | null;
     mins: number;
+    leave?: boolean | null;
+    leaveStatus?: string | null;
   }>;
   monthMins: number;
+};
+
+type Absence = {
+  id: number;
+  employe_id?: number;
+  date: string; // YYYY-MM-DD
+  status?: string | null; // conge | permission | justified | unjustified
+  reason?: string | null; // e.g., "Congé Non Payé", "Naissance d'un enfant"
 };
 
 async function authFetch(input: RequestInfo, init?: RequestInit) {
   const headers: Record<string, string> = { ...(init?.headers as any) };
   return fetch(input, { credentials: 'include', ...init, headers });
+}
+
+async function apiListAbsences(employeId: number, from: string, to: string): Promise<Absence[]> {
+  const params = new URLSearchParams({ employe_id: String(employeId), from, to, per_page: '0' });
+  const res = await authFetch(`/api/absences?${params.toString()}`);
+  if (!res.ok) throw new Error('Chargement absences impossible');
+  const json = await res.json();
+  return Array.isArray(json) ? json : (json?.data ?? []);
 }
 
 async function apiGetEmploye(id: number): Promise<{ first_name: string; last_name: string; position?: string | null; }>{
@@ -30,9 +49,25 @@ async function apiGetEmploye(id: number): Promise<{ first_name: string; last_nam
 }
 
 async function apiGetAttendanceSummary(employeId: number, monthStr: string): Promise<AttendanceSummary> {
-  const res = await authFetch(`/api/attendances/summary/${employeId}`);
+  const qs = new URLSearchParams();
+  if (monthStr) qs.set('month', monthStr);
+  const url = qs.toString() ? `/api/attendances/summary/${employeId}?${qs.toString()}` : `/api/attendances/summary/${employeId}`;
+  const res = await authFetch(url);
   if (!res.ok) throw new Error('Chargement résumé impossible');
   return res.json();
+}
+
+async function apiAdminCheckInOnField(employeId: number, date?: string): Promise<void> {
+  const res = await authFetch(`/api/attendances/admin/check-in-on-field`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ employe_id: employeId, ...(date ? { date } : {}) }),
+  });
+  if (!res.ok) {
+    let msg = 'Marquage sur le terrain impossible';
+    try { const j = await res.json(); msg = j?.message || msg; } catch {}
+    throw new Error(msg);
+  }
 }
 
 function formatHours(mins: number) {
@@ -74,6 +109,19 @@ const UserAttendance: React.FC = () => {
   const [summary, setSummary] = React.useState<AttendanceSummary | null>(null);
   const [loading, setLoading] = React.useState<boolean>(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [markingField, setMarkingField] = React.useState<boolean>(false);
+  const [markError, setMarkError] = React.useState<string | null>(null);
+  const [markSuccess, setMarkSuccess] = React.useState<string | null>(null);
+  const [absencesMap, setAbsencesMap] = React.useState<Record<string, Absence>>({});
+
+  // Formulaire de création de congé
+  const [startDate, setStartDate] = React.useState<string>('');
+  const [endDate, setEndDate] = React.useState<string>('');
+  const [leaveReason, setLeaveReason] = React.useState<string>('');
+  const [leaveType, setLeaveType] = React.useState<'maladie' | 'conge' | 'paternite' | 'maternite'>('conge');
+  const [creating, setCreating] = React.useState<boolean>(false);
+  const [createError, setCreateError] = React.useState<string | null>(null);
+  const [createSuccess, setCreateSuccess] = React.useState<string | null>(null);
 
   // Fallback: si on arrive sans state (rafraichissement / lien direct), charger l'employé
   React.useEffect(() => {
@@ -105,11 +153,26 @@ const UserAttendance: React.FC = () => {
         const selectedMonthStart = new Date(year, monthIndex, 1);
         if (selectedMonthStart > today) {
           if (alive) setSummary({ perDay: [], monthMins: 0 });
+          if (alive) setAbsencesMap({});
           return;
         }
         const monthStr = `${year}-${String(monthIndex+1).padStart(2,'0')}`;
         const data = await apiGetAttendanceSummary(Number(id), monthStr);
         if (alive) setSummary(data);
+        // Fetch absences for the current month range and index by date (local date strings to avoid timezone shifts)
+        const firstDate = new Date(year, monthIndex, 1);
+        const lastDate = new Date(year, monthIndex + 1, 0);
+        const firstDayStr = `${firstDate.getFullYear()}-${String(firstDate.getMonth()+1).padStart(2,'0')}-${String(firstDate.getDate()).padStart(2,'0')}`;
+        const lastDayStr = `${lastDate.getFullYear()}-${String(lastDate.getMonth()+1).padStart(2,'0')}-${String(lastDate.getDate()).padStart(2,'0')}`;
+        const abs = await apiListAbsences(Number(id), firstDayStr, lastDayStr);
+        if (alive) {
+          const map: Record<string, Absence> = {};
+          for (const a of abs) {
+            const key = String((a as any).date).slice(0, 10); // normalize to YYYY-MM-DD
+            map[key] = a; // unique par jour côté backend
+          }
+          setAbsencesMap(map);
+        }
       } catch (e: any) {
         if (alive) setError(e?.message || 'Chargement impossible');
       } finally {
@@ -119,6 +182,44 @@ const UserAttendance: React.FC = () => {
     run();
     return () => { alive = false; };
   }, [id, year, monthIndex]);
+
+  async function handleCreateLeave() {
+    if (!id) return;
+    setCreateError(null);
+    setCreateSuccess(null);
+    if (!startDate || !endDate) {
+      setCreateError('Veuillez sélectionner une date de début et une date de fin');
+      return;
+    }
+    try {
+      setCreating(true);
+      const res = await authFetch(`/api/absences`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          employe_id: Number(id),
+          start_date: startDate,
+          end_date: endDate,
+          status: leaveType,
+          reason: leaveReason || undefined,
+        }),
+      });
+      if (!res.ok) {
+        let msg = 'Création du congé impossible';
+        try { const j = await res.json(); msg = j?.message || msg; } catch {}
+        throw new Error(msg);
+      }
+      setCreateSuccess('Congé créé avec succès');
+      // Rafraîchir le résumé
+      const monthStr = `${year}-${String(monthIndex+1).padStart(2,'0')}`;
+      const data = await apiGetAttendanceSummary(Number(id), monthStr);
+      setSummary(data);
+    } catch (e: any) {
+      setCreateError(e?.message || 'Erreur inconnue');
+    } finally {
+      setCreating(false);
+    }
+  }
 
   const handleChangePeriod = (value: string) => {
     setPeriod(value);
@@ -131,6 +232,7 @@ const UserAttendance: React.FC = () => {
 
   const monthLabel = new Date(year, monthIndex, 27).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
   const generatedAt = new Date().toLocaleString('fr-FR');
+  const todayStr = new Date().toISOString().slice(0,10);
 
   return (
     <div className="min-h-screen bg-background container mx-auto">
@@ -162,19 +264,42 @@ const UserAttendance: React.FC = () => {
                 ))}
               </SelectContent>
             </Select>
+            <Button
+              variant="default"
+              onClick={async () => {
+                if (!id) return;
+                setMarkError(null);
+                setMarkSuccess(null);
+                try {
+                  setMarkingField(true);
+                  await apiAdminCheckInOnField(Number(id), todayStr);
+                  setMarkSuccess("Arrivée marquée 'Sur le terrain' pour aujourd'hui");
+                  const monthStr = `${year}-${String(monthIndex+1).padStart(2,'0')}`;
+                  const data = await apiGetAttendanceSummary(Number(id), monthStr);
+                  setSummary(data);
+                } catch (e: any) {
+                  setMarkError(e?.message || 'Erreur inconnue');
+                } finally {
+                  setMarkingField(false);
+                }
+              }}
+              disabled={markingField}
+            >
+              {markingField ? 'Marquage…' : "Marquer Sur le terrain"}
+            </Button>
             <Button variant="outline" onClick={() => window.print()}>Imprimer</Button>
           </div>
         </div>
 
+
         {/* Print-only header */}
         <div className="hidden print:block">
-          <div className="text-center border-b pb-4 mb-6">
+          <div className="text-center border-b pb-4 mb-1">
             <div className="text-xl font-extrabold tracking-wide">FICHE DE PRÉSENCE MENSUELLE</div>
-            <div className="mt-1 text-sm text-muted-foreground">{monthLabel}</div>
             <div className="mt-2 font-medium">
               {empName ? (
                 <>
-                  {empName}{empPosition ? ` • ${empPosition}` : ""}
+                  {monthLabel} {empName}{empPosition ? ` • ${empPosition}` : ""}
                 </>
               ) : (
                 <>
@@ -186,7 +311,13 @@ const UserAttendance: React.FC = () => {
         </div>
 
         <Card className="print:border-0 print:shadow-none"> 
-          <CardContent className="print:p-2 mt-6">
+          <CardContent className="print:p-2 mt-2">
+            {(markError || markSuccess) && (
+              <div className="mb-3 text-sm">
+                {markError && <div className="text-destructive">{markError}</div>}
+                {markSuccess && <div className="text-green-600">{markSuccess}</div>}
+              </div>
+            )}
             <div className="overflow-x-auto print:overflow-visible">
               <Table className="print:text-[12px] print:leading-tight print:table-fixed w-full">
                 <TableHeader>
@@ -194,9 +325,9 @@ const UserAttendance: React.FC = () => {
                     <TableHead className="whitespace-nowrap text-center px-3 py-2 print:px-1 print:py-0.5">Jour</TableHead>
                     <TableHead className="whitespace-nowrap text-center px-3 py-2 print:px-1 print:py-0.5">Date</TableHead>
                     <TableHead className="whitespace-nowrap text-center px-3 py-2 print:px-1 print:py-0.5">Heure d'arrivée</TableHead>
-                    <TableHead className="whitespace-nowrap text-center px-3 py-2 print:px-1 print:py-0.5">Signture Arrivée</TableHead>
+                    <TableHead className="whitespace-nowrap text-center px-3 py-2 print:px-1 print:py-0.5">Signature Arrivée</TableHead>
                     <TableHead className="whitespace-nowrap text-center px-3 py-2 print:px-1 print:py-0.5">Heure de départ</TableHead>
-                    <TableHead className="whitespace-nowrap text-center px-3 py-2 print:px-1 print:py-0.5">Signture Départ</TableHead>
+                    <TableHead className="whitespace-nowrap text-center px-3 py-2 print:px-1 print:py-0.5">Signature Départ</TableHead>
                     <TableHead className="whitespace-nowrap text-center px-3 py-2 print:px-1 print:py-0.5">Total</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -214,31 +345,49 @@ const UserAttendance: React.FC = () => {
                   {!loading && !error && summary && summary.perDay.map((e) => {
                     const d = new Date(e.date);
                     const weekday = d.getDay(); // 0 Sunday, 6 Saturday
-                    // Hide weekends only if there is no attendance data for that day
-                    const hasData = !!(e.in || e.out || e.inSignature || e.outSignature);
+                    // Hide weekends only if there is no attendance data AND not a leave day
+                    const abs = absencesMap[e.date];
+                    const hasData = !!(e.in || e.out || e.inSignature || e.outSignature || e.leave || abs);
                     if ((weekday === 0 || weekday === 6) && !hasData) return null;
                     const jour = d.toLocaleDateString('fr-FR', { weekday: 'long' });
                     const date = d.toLocaleDateString('fr-FR');
+                    const dateKey = String(e.date).slice(0, 10);
+                    const isLeave = !!absencesMap[dateKey] || !!e.leave;
+                    const statusCap = absencesMap[dateKey]?.status ? (absencesMap[dateKey]!.status!.charAt(0).toUpperCase() + absencesMap[dateKey]!.status!.slice(1)) : null;
+                    const leaveLabel = absencesMap[dateKey]
+                      ? [statusCap, absencesMap[dateKey]!.reason || null].filter(Boolean).join(' — ')
+                      : '-';
                     return (
-                      <TableRow key={e.date} className="even:bg-muted/100 print:even:bg-gray-100 print:text-[10px]">
+                      <TableRow key={e.date} className={`print:text-[10px] ${isLeave ? 'bg-yellow-50 print:bg-yellow-100' : 'even:bg-muted/100 print:even:bg-gray-100'}`}>
                         <TableCell className="capitalize text-center px-3 py-2 print:px-4 print:py-2">{jour}</TableCell>
                         <TableCell className="text-center px-3 py-2 print:px-4 print:py-2">{date}</TableCell>
-                        <TableCell className="text-center px-3 py-2 print:px-4 print:py-2">{e.in ?? '-'}</TableCell>
                         <TableCell className="text-center px-3 py-2 print:px-4 print:py-2">
-                          {e.inSignature && typeof e.inSignature === 'string' && (
+                          {isLeave
+                            ? leaveLabel
+                            : (
+                              e.in ? (
+                                <span>
+                                  {e.in}
+                                  {e.onField ? ' Sur le terrain' : ''}
+                                </span>
+                              ) : '-'
+                            )}
+                        </TableCell>
+                        <TableCell className="text-center px-3 py-2 print:px-0 print:py-0">
+                          {!isLeave && e.inSignature && typeof e.inSignature === 'string' && (
                             e.inSignature.startsWith('data:image') ||
                             e.inSignature.startsWith('/storage/') ||
                             e.inSignature.startsWith('http://') ||
                             e.inSignature.startsWith('https://')
                           ) ? (
-                            <img src={e.inSignature} alt="Signature arrivée" className="inline-block h-6 w-auto print:h-6" />
+                            <img src={e.inSignature} alt="Signature arrivée" className="inline-block h-6 w-auto print:h-4" />
                           ) : (
-                            e.inSignature ? '✓' : '-'
+                            isLeave ? '—' : (e.inSignature ? '✓' : '-')
                           )}
                         </TableCell>
-                        <TableCell className="text-center px-3 py-2 print:px-4 print:py-2">{e.out ?? '-'}</TableCell>
-                        <TableCell className="text-center px-2 py-2 print:px-2 print:py-2">
-                          {e.outSignature && typeof e.outSignature === 'string' && (
+                        <TableCell className="text-center px-3 py-2 print:px-4 print:py-2">{isLeave ? leaveLabel : (e.out ?? '-')}</TableCell>
+                        <TableCell className="text-center px-2 py-2 print:px-0 print:py-0">
+                          {!isLeave && e.outSignature && typeof e.outSignature === 'string' && (
                             e.outSignature.startsWith('data:image') ||
                             e.outSignature.startsWith('/storage/') ||
                             e.outSignature.startsWith('http://') ||
@@ -246,10 +395,10 @@ const UserAttendance: React.FC = () => {
                           ) ? (
                             <img src={e.outSignature} alt="Signature départ" className="inline-block h-6 w-auto print:h-6" />
                           ) : (
-                            e.outSignature ? '✓' : '-'
+                            isLeave ? '—' : (e.outSignature ? '✓' : '-')
                           )}
                         </TableCell>
-                        <TableCell className="text-center font-medium px-3 py-2 print:px-4 print:py-2">{formatHours(e.mins)}</TableCell>
+                        <TableCell className="text-center font-medium px-3 py-2 print:px-4 print:py-2">{isLeave ? '00:00' : formatHours(e.mins)}</TableCell>
                       </TableRow>
                     );
                   })}

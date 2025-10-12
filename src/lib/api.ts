@@ -28,7 +28,10 @@ export type AttendanceSummary = {
     out?: string | null;
     inSignature?: string | null;
     outSignature?: string | null;
+    onField?: boolean | null;
     mins: number;
+    leave?: boolean | null;
+    leaveStatus?: string | null;
   }>;
   monthMins: number;
 };
@@ -155,8 +158,20 @@ export async function attendanceCheckOut(employeId: number, signature?: string):
   });
 }
 
+// Admin-only: marquer une arrivée "sur le terrain" pour aujourd'hui (ou une date spécifiée)
+export async function adminCheckInOnField(employeId: number, date?: string): Promise<any> {
+  return http(`/api/attendances/admin/check-in-on-field`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ employe_id: employeId, ...(date ? { date } : {}) }),
+  });
+}
+
 export async function getAttendanceSummary(employeId: number, monthStr: string): Promise<AttendanceSummary> {
-  return http<AttendanceSummary>(`/api/attendances/summary/${employeId}`);
+  const qs = new URLSearchParams();
+  if (monthStr) qs.set('month', monthStr);
+  const url = qs.toString() ? `/api/attendances/summary/${employeId}?${qs.toString()}` : `/api/attendances/summary/${employeId}`;
+  return http<AttendanceSummary>(url);
 }
 
 // Liste des pointages (avec filtres optionnels)
@@ -236,4 +251,45 @@ export async function deleteTemporaryDeparture(id: number): Promise<void> {
       throw new Error(res.statusText || 'Erreur API');
     }
   }
+}
+
+// Absences (Congés)
+export type Absence = {
+  id: number;
+  employe_id: number;
+  date: string; // YYYY-MM-DD
+  status?: string | null; // conge | justified | unjustified
+  reason?: string | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export async function createAbsence(payload: {
+  employe_id: number;
+  date?: string; // single day
+  start_date?: string; // YYYY-MM-DD
+  end_date?: string;   // YYYY-MM-DD
+  status?: string;     // default conge
+  reason?: string;
+}): Promise<Absence | Absence[]> {
+  return http<Absence | Absence[]>(`/api/absences`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function listAbsences(params?: {
+  employe_id?: number;
+  from?: string; // YYYY-MM-DD
+  to?: string;   // YYYY-MM-DD
+  per_page?: number; // 0 pour tout
+}): Promise<Absence[]> {
+  const qs = new URLSearchParams();
+  if (params?.employe_id) qs.set('employe_id', String(params.employe_id));
+  if (params?.from) qs.set('from', params.from);
+  if (params?.to) qs.set('to', params.to);
+  if (typeof params?.per_page === 'number') qs.set('per_page', String(params.per_page)); else qs.set('per_page', '0');
+  const json = await http<any>(`/api/absences?${qs.toString()}`);
+  return Array.isArray(json) ? json : (json?.data ?? []);
 }
