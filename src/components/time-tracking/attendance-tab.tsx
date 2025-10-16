@@ -6,7 +6,7 @@ import { SignatureCanvas } from '@/components/ui/signature-canvas';
 import { Clock, Users } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { attendanceCheckIn } from '@/lib/api';
-import { CHECKIN_START_MIN, CHECKIN_END_MIN, getNowMinutes } from '@/lib/config';
+import { CHECKIN_START_MIN, CHECKIN_END_MIN, getNowMinutes, SIGNATURE_MODAL_WIDTH, SIGNATURE_MODAL_HEIGHT, SIGNATURE_CANVAS_WIDTH, SIGNATURE_CANVAS_HEIGHT } from '@/lib/config';
 interface User {
   id: string;
   firstName: string;
@@ -137,8 +137,16 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({ users, onUpdated }
       </Card>
 
       <Dialog open={isSignatureModalOpen} onOpenChange={setIsSignatureModalOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
+        <DialogContent
+          className="max-w-none p-0 mx-4 sm:mx-6"
+          style={{
+            width: SIGNATURE_MODAL_WIDTH,
+            height: SIGNATURE_MODAL_HEIGHT,
+            maxWidth: 'calc(100vw - 2rem)',
+            maxHeight: 'calc(100vh - 2rem)'
+          }}
+        >
+          <DialogHeader className="p-4 border-b">
             <DialogTitle>Signature de pointage</DialogTitle>
             <DialogDescription>
               {selectedUser && (
@@ -151,11 +159,11 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({ users, onUpdated }
             </DialogDescription>
           </DialogHeader>
           
-          <div className="py-4">
+          <div className="p-4">
             <SignatureCanvas
               onSignatureComplete={handleSignatureComplete}
-              width={350}
-              height={150}
+              width={SIGNATURE_CANVAS_WIDTH}
+              height={SIGNATURE_CANVAS_HEIGHT}
             />
           </div>
         </DialogContent>

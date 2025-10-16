@@ -101,7 +101,7 @@ export const SignatureCanvas: React.FC<SignatureCanvasProps> = ({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-2">
       <div className="border-2 border-dashed border-border rounded-lg p-4 bg-muted/50">
         <canvas
           ref={canvasRef}

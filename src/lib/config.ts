@@ -30,3 +30,29 @@ export function getNowMinutes(): number {
   const d = new Date();
   return d.getHours() * 60 + d.getMinutes();
 }
+
+// Signature modal and canvas sizing
+function parsePositiveInt(v: any, fallback: number): number {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : fallback;
+}
+
+export const SIGNATURE_MODAL_WIDTH = parsePositiveInt(
+  (import.meta as any).env?.VITE_SIGNATURE_MODAL_WIDTH ?? 700,
+  700
+);
+
+export const SIGNATURE_MODAL_HEIGHT = parsePositiveInt(
+  (import.meta as any).env?.VITE_SIGNATURE_MODAL_HEIGHT ?? 530,
+  530
+);
+
+export const SIGNATURE_CANVAS_WIDTH = parsePositiveInt(
+  (import.meta as any).env?.VITE_SIGNATURE_CANVAS_WIDTH ?? 630,
+  630
+);
+
+export const SIGNATURE_CANVAS_HEIGHT = parsePositiveInt(
+  (import.meta as any).env?.VITE_SIGNATURE_CANVAS_HEIGHT ?? 270,
+  270
+);

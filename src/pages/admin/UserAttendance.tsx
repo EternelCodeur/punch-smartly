@@ -34,8 +34,9 @@ async function authFetch(input: RequestInfo, init?: RequestInit) {
   return fetch(input, { credentials: 'include', ...init, headers });
 }
 
-async function apiListAbsences(employeId: number, from: string, to: string): Promise<Absence[]> {
-  const params = new URLSearchParams({ employe_id: String(employeId), from, to, per_page: '0' });
+async function apiListAbsences(employeId: number, month: string): Promise<Absence[]> {
+  // Use month filtering on backend to avoid timezone parsing pitfalls
+  const params = new URLSearchParams({ employe_id: String(employeId), month, per_page: '0' });
   const res = await authFetch(`/api/absences?${params.toString()}`);
   if (!res.ok) throw new Error('Chargement absences impossible');
   const json = await res.json();
@@ -159,12 +160,8 @@ const UserAttendance: React.FC = () => {
         const monthStr = `${year}-${String(monthIndex+1).padStart(2,'0')}`;
         const data = await apiGetAttendanceSummary(Number(id), monthStr);
         if (alive) setSummary(data);
-        // Fetch absences for the current month range and index by date (local date strings to avoid timezone shifts)
-        const firstDate = new Date(year, monthIndex, 1);
-        const lastDate = new Date(year, monthIndex + 1, 0);
-        const firstDayStr = `${firstDate.getFullYear()}-${String(firstDate.getMonth()+1).padStart(2,'0')}-${String(firstDate.getDate()).padStart(2,'0')}`;
-        const lastDayStr = `${lastDate.getFullYear()}-${String(lastDate.getMonth()+1).padStart(2,'0')}-${String(lastDate.getDate()).padStart(2,'0')}`;
-        const abs = await apiListAbsences(Number(id), firstDayStr, lastDayStr);
+        // Fetch absences for current month and index by date (avoid timezone shifts)
+        const abs = await apiListAbsences(Number(id), monthStr);
         if (alive) {
           const map: Record<string, Absence> = {};
           for (const a of abs) {
@@ -343,16 +340,20 @@ const UserAttendance: React.FC = () => {
                     </TableRow>
                   )}
                   {!loading && !error && summary && summary.perDay.map((e) => {
-                    const d = new Date(e.date);
+                    // Use the raw string date (YYYY-MM-DD...) to build a local date without timezone shift
+                    const dateKey = String(e.date).slice(0, 10); // YYYY-MM-DD
+                    const [yStr, mStr, dStr] = dateKey.split('-');
+                    const y = Number(yStr);
+                    const mIdx = Math.max(1, Number(mStr || '1')) - 1; // 0-11
+                    const dayNum = Math.max(1, Number(dStr || '1'));
+                    const d = new Date(y, mIdx, dayNum);
                     const weekday = d.getDay(); // 0 Sunday, 6 Saturday
-                    // Hide weekends only if there is no attendance data AND not a leave day
-                    const abs = absencesMap[e.date];
-                    const hasData = !!(e.in || e.out || e.inSignature || e.outSignature || e.leave || abs);
-                    if ((weekday === 0 || weekday === 6) && !hasData) return null;
+                    if (weekday === 0 || weekday === 6) return null;
+                    const abs = absencesMap[dateKey];
                     const jour = d.toLocaleDateString('fr-FR', { weekday: 'long' });
                     const date = d.toLocaleDateString('fr-FR');
-                    const dateKey = String(e.date).slice(0, 10);
-                    const isLeave = !!absencesMap[dateKey] || !!e.leave;
+                    // Mark leave strictly based on database absences
+                    const isLeave = !!absencesMap[dateKey];
                     const statusCap = absencesMap[dateKey]?.status ? (absencesMap[dateKey]!.status!.charAt(0).toUpperCase() + absencesMap[dateKey]!.status!.slice(1)) : null;
                     const leaveLabel = absencesMap[dateKey]
                       ? [statusCap, absencesMap[dateKey]!.reason || null].filter(Boolean).join(' — ')

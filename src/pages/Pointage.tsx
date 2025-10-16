@@ -198,7 +198,7 @@ const Pointage: React.FC = () => {
               {(loading) && <div className="p-4 text-center text-muted-foreground">Chargement des données...</div>}
               {(error) && <div className="p-4 text-center text-destructive">{error}</div>}
               {!loading && !error && (
-                <CongesTab users={users} />
+                <CongesTab/>
               )}
             </TabsContent>
           </Tabs>

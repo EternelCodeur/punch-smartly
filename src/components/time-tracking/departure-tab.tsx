@@ -9,7 +9,7 @@ import { SignatureCanvas } from '@/components/ui/signature-canvas';
 import { LogOut, LogIn, AlertCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { listEmployes, type Employe, listTemporaryDepartures, createTemporaryDeparture, markTemporaryDepartureReturn, type TemporaryDeparture } from '@/lib/api';
-import { CHECKOUT_START_MIN, getNowMinutes } from '@/lib/config';
+import { CHECKOUT_START_MIN, getNowMinutes as getNowMinutesFn, SIGNATURE_MODAL_WIDTH, SIGNATURE_MODAL_HEIGHT, SIGNATURE_CANVAS_WIDTH, SIGNATURE_CANVAS_HEIGHT } from '@/lib/config';
 
 interface DepartureFormData {
   firstName: string;
@@ -56,7 +56,7 @@ export const DepartureTab: React.FC<DepartureTabProps> = ({ users, onUpdated }) 
     if (reasonType === 'rendezvous') built = 'Rendez-vous professionnel';
     else if (reasonType === 'urgence') built = urgenceName ? `Urgence familiale – ${urgenceName}` : 'Urgence familiale';
     else if (reasonType === 'prospection') built = clientName ? `Prospection client – ${clientName}` : 'Prospection client';
-    else if (reasonType === 'demarche') built = endroitName ? `Demarche administratif – ${endroitName}` : 'Demarche administratif';
+    else if (reasonType === 'demarche') built = endroitName ? `Demarche administrative – ${endroitName}` : 'Demarche administrative';
     else if (reasonType === 'autre') built = otherReason.trim();
     setFormData(prev => ({ ...prev, reason: built }));
   }, [reasonType, clientName, endroitName, otherReason, urgenceName]);
@@ -81,7 +81,7 @@ export const DepartureTab: React.FC<DepartureTabProps> = ({ users, onUpdated }) 
   })();
 
   // Deprecated gating: sorties autorisées à toute heure (conservé si besoin)
-  const nowMin = getNowMinutes();
+  const nowMin = getNowMinutesFn();
   const canMarkDeparture = true;
 
   // YYYY-MM for current month
@@ -575,8 +575,16 @@ export const DepartureTab: React.FC<DepartureTabProps> = ({ users, onUpdated }) 
       )}
 
       <Dialog open={isSignatureModalOpen} onOpenChange={setIsSignatureModalOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
+        <DialogContent
+          className="max-w-none p-0 mx-4 sm:mx-6"
+          style={{
+            width: SIGNATURE_MODAL_WIDTH,
+            height: SIGNATURE_MODAL_HEIGHT,
+            maxWidth: 'calc(100vw - 2rem)',
+            maxHeight: 'calc(100vh - 2rem)'
+          }}
+        >
+          <DialogHeader className="p-4 border-b">
             <DialogTitle>
               Signature de {actionType === 'departure' ? 'sortie' : 'retour'}
             </DialogTitle>
@@ -594,11 +602,11 @@ export const DepartureTab: React.FC<DepartureTabProps> = ({ users, onUpdated }) 
             </DialogDescription>
           </DialogHeader>
           
-          <div className="py-4">
+          <div className="p-4">
             <SignatureCanvas
               onSignatureComplete={handleSignatureComplete}
-              width={350}
-              height={150}
+              width={SIGNATURE_CANVAS_WIDTH}
+              height={SIGNATURE_CANVAS_HEIGHT}
             />
           </div>
         </DialogContent>

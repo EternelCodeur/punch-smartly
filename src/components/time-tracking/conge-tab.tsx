@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -43,6 +43,49 @@ const itemVariants = {
   visible: { opacity: 1, y: 0 },
 };
 
+// Helpers: permissions & business days (module scope)
+function getAllowedDaysForPermission(title: string): number | null {
+  const p = permissions.find(pp => pp.title === title);
+  if (!p) return null;
+  const m = p.duration.match(/(\\d+)\\s*jours?/i);
+  return m ? parseInt(m[1], 10) : null;
+}
+
+function isWeekend(d: Date): boolean {
+  const day = d.getDay();
+  return day === 0 || day === 6; // Sunday or Saturday
+}
+
+// Add N business days, excluding the start day itself
+function addBusinessDaysExclusive(startISO: string, n: number): string {
+  if (!startISO || !Number.isFinite(n) || n <= 0) return startISO;
+  let d = new Date(startISO + 'T00:00:00');
+  let added = 0;
+  while (added < n) {
+    d.setDate(d.getDate() + 1);
+    if (!isWeekend(d)) added += 1;
+  }
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+// Count business days between start (exclusive) and end (inclusive)
+function countBusinessDaysExclusiveStart(startISO: string, endISO: string): number {
+  if (!startISO || !endISO) return 0;
+  const start = new Date(startISO + 'T00:00:00');
+  const end = new Date(endISO + 'T00:00:00');
+  if (end < start) return 0;
+  let count = 0;
+  const d = new Date(start);
+  d.setDate(d.getDate() + 1); // exclude start day
+  while (d <= end) {
+    if (!isWeekend(d)) count += 1;
+    d.setDate(d.getDate() + 1);
+  }
+  return count;
+}
 export const CongesTab: React.FC<CongesTabProps> = ({ onUpdated }) => {
   const { toast } = useToast();
 
@@ -105,6 +148,21 @@ export const CongesTab: React.FC<CongesTabProps> = ({ onUpdated }) => {
       return;
     }
     const isPermission = permissions.some(p => p.title === type);
+    // Enforce maximum allowed business days for permissions
+    if (isPermission) {
+      const allowed = getAllowedDaysForPermission(type);
+      if (allowed && allowed > 0) {
+        const used = countBusinessDaysExclusiveStart(start, end);
+        if (used > allowed) {
+          toast({
+            title: 'Trop de jours',
+            description: `La permission « ${type} » autorise ${allowed} jour(s) ouvré(s). Vous en avez ${used}. Réduisez la date de fin.`,
+            variant: 'destructive',
+          });
+          return;
+        }
+      }
+    }
 
     if (!selectedEmp) {
       toast({ title: 'Sélection requise', description: 'Veuillez d\'abord sélectionner un employé.' , variant: 'destructive' });
@@ -289,6 +347,17 @@ const PermissionCard: React.FC<PermissionCardProps> = ({ permission, isExpanded,
   const [endDate, setEndDate] = useState('');
 
   const handleToggle = () => onExpand(isExpanded ? null : permission.title);
+  // Auto-compute end date when start date changes for a permission
+  const handleStartChange: React.ChangeEventHandler<HTMLInputElement> = (e) => {
+    const v = e.target.value;
+    setStartDate(v);
+    const m = permission.duration.match(/(\\d+)\\s*jours?/i);
+    const days = m ? parseInt(m[1], 10) : 0;
+    if (v && days > 0) {
+      const autoEnd = addBusinessDaysExclusive(v, days);
+      setEndDate(autoEnd);
+    }
+  };
 
   const handleSubmit = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -320,7 +389,7 @@ const PermissionCard: React.FC<PermissionCardProps> = ({ permission, isExpanded,
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor={`start-${permission.title}`}>Date de début</Label>
-                    <Input id={`start-${permission.title}`} type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
+                    <Input id={`start-${permission.title}`} type="date" value={startDate} onChange={handleStartChange} />
                   </div>
                   <div>
                     <Label htmlFor={`end-${permission.title}`}>Date de fin</Label>
@@ -338,3 +407,4 @@ const PermissionCard: React.FC<PermissionCardProps> = ({ permission, isExpanded,
     </motion.div>
   );
 };
+
