@@ -38,21 +38,21 @@ function parsePositiveInt(v: any, fallback: number): number {
 }
 
 export const SIGNATURE_MODAL_WIDTH = parsePositiveInt(
-  (import.meta as any).env?.VITE_SIGNATURE_MODAL_WIDTH ?? 700,
-  700
+  (import.meta as any).env?.VITE_SIGNATURE_MODAL_WIDTH ?? 520,
+  520
 );
 
 export const SIGNATURE_MODAL_HEIGHT = parsePositiveInt(
-  (import.meta as any).env?.VITE_SIGNATURE_MODAL_HEIGHT ?? 530,
-  530
+  (import.meta as any).env?.VITE_SIGNATURE_MODAL_HEIGHT ?? 480,
+  480
 );
 
 export const SIGNATURE_CANVAS_WIDTH = parsePositiveInt(
-  (import.meta as any).env?.VITE_SIGNATURE_CANVAS_WIDTH ?? 630,
-  630
+  (import.meta as any).env?.VITE_SIGNATURE_CANVAS_WIDTH ?? 450,
+  450
 );
 
 export const SIGNATURE_CANVAS_HEIGHT = parsePositiveInt(
-  (import.meta as any).env?.VITE_SIGNATURE_CANVAS_HEIGHT ?? 270,
-  270
+  (import.meta as any).env?.VITE_SIGNATURE_CANVAS_HEIGHT ?? 240,
+  240
 );

@@ -9,8 +9,8 @@ interface SignatureCanvasProps {
 
 export const SignatureCanvas: React.FC<SignatureCanvasProps> = ({
   onSignatureComplete,
-  width = 400,
-  height = 200,
+  width = 450,
+  height = 240,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);

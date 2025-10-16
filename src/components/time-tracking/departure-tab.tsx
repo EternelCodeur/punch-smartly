@@ -576,12 +576,10 @@ export const DepartureTab: React.FC<DepartureTabProps> = ({ users, onUpdated }) 
 
       <Dialog open={isSignatureModalOpen} onOpenChange={setIsSignatureModalOpen}>
         <DialogContent
-          className="max-w-none p-0 mx-4 sm:mx-6"
+          className="max-w-none p-0"
           style={{
             width: SIGNATURE_MODAL_WIDTH,
             height: SIGNATURE_MODAL_HEIGHT,
-            maxWidth: 'calc(100vw - 2rem)',
-            maxHeight: 'calc(100vh - 2rem)'
           }}
         >
           <DialogHeader className="p-4 border-b">
