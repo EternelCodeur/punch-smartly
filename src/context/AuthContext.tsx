@@ -1,9 +1,11 @@
 import React, { createContext, useContext, useMemo, useState, useEffect } from "react";
 
-export type Role = "user" | "admin" | "superadmin";
+export type Role = "user" | "admin" | "superadmin" | "supertenant";
 export type AuthUser = {
   username: string;
   role: Role;
+  tenant_id?: number | null;
+  enterprise_id?: number | null;
 };
 
 type AuthContextType = {
@@ -42,7 +44,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const data = await res.json();
         const srvUser = (data?.user ?? data) as any;
         if (srvUser?.nom && srvUser?.role) {
-          const nextUser: AuthUser = { username: srvUser.nom, role: srvUser.role };
+          const nextUser: AuthUser = { username: srvUser.nom, role: srvUser.role, tenant_id: srvUser.tenant_id, enterprise_id: srvUser.enterprise_id };
           setUser(nextUser);
           localStorage.setItem(STORAGE_KEY, JSON.stringify(nextUser));
         }
@@ -77,7 +79,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const data = await res.json();
       const srvUser = (data?.user ?? data) as any;
       if (srvUser?.nom && srvUser?.role) {
-        const nextUser: AuthUser = { username: srvUser.nom, role: srvUser.role };
+        const nextUser: AuthUser = { username: srvUser.nom, role: srvUser.role, tenant_id: srvUser.tenant_id, enterprise_id: srvUser.enterprise_id };
         setUser(nextUser);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(nextUser));
       }
@@ -90,7 +92,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const j = await me.json();
         const srvUser = (j?.user ?? j) as any;
         if (srvUser?.nom && srvUser?.role) {
-          const nextUser: AuthUser = { username: srvUser.nom, role: srvUser.role };
+          const nextUser: AuthUser = { username: srvUser.nom, role: srvUser.role, tenant_id: srvUser.tenant_id, enterprise_id: srvUser.enterprise_id };
           setUser(nextUser);
           localStorage.setItem(STORAGE_KEY, JSON.stringify(nextUser));
           return;

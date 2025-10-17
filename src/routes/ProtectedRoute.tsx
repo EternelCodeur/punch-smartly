@@ -21,7 +21,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allow, redirectT
   }
 
   if (!allow.includes(user.role)) {
-    const fallback = user.role === "superadmin" ? "/superadmin" : user.role === "admin" ? "/admin" : "/pointage";
+    const fallback = user.role === "supertenant" ? "/supertenant" : user.role === "superadmin" ? "/superadmin" : user.role === "admin" ? "/admin" : "/pointage";
     return <Navigate to={fallback} replace />;
   }
 

@@ -11,6 +11,7 @@ import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { ProtectedRoute } from "@/routes/ProtectedRoute";
 import UserAttendance from "@/pages/admin/UserAttendance";
 import SuperAdmin from "./pages/SuperAdmin";
+import SuperTenant from "./pages/SuperTenant";
 
 const queryClient = new QueryClient();
 
@@ -18,7 +19,7 @@ const HomeRedirect = () => {
   const { isAuthenticated, user, hydrating } = useAuth();
   if (hydrating) return null; // wait initial session hydration
   if (!isAuthenticated || !user) return <Navigate to="/login" replace />;
-  const path = user.role === "superadmin" ? "/superadmin" : user.role === "admin" ? "/admin" : "/pointage";
+  const path = user.role === "supertenant" ? "/supertenant" : user.role === "superadmin" ? "/superadmin" : user.role === "admin" ? "/admin" : "/pointage";
   return <Navigate to={path} replace />;
 };
 
@@ -44,6 +45,10 @@ const App = () => (
 
             <Route element={<ProtectedRoute allow={["superadmin"]} />}>
               <Route path="/superadmin" element={<SuperAdmin />} />
+            </Route>
+
+            <Route element={<ProtectedRoute allow={["supertenant"]} />}>
+              <Route path="/supertenant" element={<SuperTenant />} />
             </Route>
 
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

@@ -10,13 +10,13 @@ function parseTimeToMinutes(hhmm: string, fallback: number): number {
 }
 
 export const CHECKIN_START_MIN = parseTimeToMinutes(
-  (import.meta as any).env?.VITE_CHECKIN_START ?? '07:00',
-  7 * 60
+  (import.meta as any).env?.VITE_CHECKIN_START ?? '06:00',
+  6 * 60
 );
 
 export const CHECKIN_END_MIN = parseTimeToMinutes(
-  (import.meta as any).env?.VITE_CHECKIN_END ?? '11:00',
-  11 * 60
+  (import.meta as any).env?.VITE_CHECKIN_END ?? '12:00',
+  12 * 60
 );
 
 export const CHECKOUT_START_MIN = parseTimeToMinutes(

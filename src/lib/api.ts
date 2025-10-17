@@ -16,6 +16,61 @@ export type Employe = {
   updated_at?: string;
 };
 
+// Tenants
+export type Tenant = {
+  id: number;
+  name: string;
+  contact?: string | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type CreatedTenantUser = {
+  id: number;
+  nom: string;
+  role: string;
+  tenant_id: number | null;
+  enterprise_id: number | null;
+};
+
+export type CreateTenantResponse = {
+  tenant: Tenant;
+  user: CreatedTenantUser;
+  plain_password: string;
+};
+
+export async function listTenants(params?: { search?: string; per_page?: number; user_role?: string }): Promise<Tenant[]> {
+  const qs = new URLSearchParams();
+  if (params?.search) qs.set('search', params.search);
+  if (typeof params?.per_page === 'number') qs.set('per_page', String(params.per_page)); else qs.set('per_page', '0');
+  if (params?.user_role) qs.set('user_role', params.user_role);
+  const json = await http<any>(`/api/tenants?${qs.toString()}`);
+  return Array.isArray(json) ? json : (json?.data ?? []);
+}
+
+export async function createTenant(payload: { name: string; contact?: string }): Promise<CreateTenantResponse> {
+  return http<CreateTenantResponse>(`/api/tenants`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateTenant(id: number, payload: { name?: string; contact?: string }): Promise<Tenant> {
+  return http<Tenant>(`/api/tenants/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteTenant(id: number): Promise<void> {
+  const res = await fetch(withApiBase(`/api/tenants/${id}`), { method: 'DELETE', credentials: 'include' });
+  if (!res.ok && res.status !== 204 && res.status !== 404) {
+    try { const j = await res.json(); throw new Error(j?.message || res.statusText || 'Erreur API'); } catch { throw new Error(res.statusText || 'Erreur API'); }
+  }
+}
+
 export type Entreprise = {
   id: number;
   name: string;

@@ -76,7 +76,8 @@ const SuperAdmin: React.FC = () => {
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    return accounts.filter(a => `${a.nom} ${a.role} ${a.entreprise?.name ?? ""}`.toLowerCase().includes(q));
+    const roleFiltered = accounts.filter(a => a.role === 'user' || a.role === 'admin');
+    return roleFiltered.filter(a => `${a.nom} ${a.role} ${a.entreprise?.name ?? ""}`.toLowerCase().includes(q));
   }, [accounts, search]);
 
   const onCreate = async () => {
@@ -169,8 +170,8 @@ const SuperAdmin: React.FC = () => {
 
         <Card>
           <CardHeader>
-            <CardTitle>Entreprises</CardTitle>
-            <CardDescription>Créer et sélectionner une entreprise</CardDescription>
+            <CardTitle>Localisation</CardTitle>
+            <CardDescription>Créer et sélectionner une localisation</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -189,9 +190,9 @@ const SuperAdmin: React.FC = () => {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Nouvelle entreprise</Label>
+                <Label>Nouvelle localisation</Label>
                 <div className="flex gap-2">
-                  <Input placeholder="Nom de l'entreprise" value={entFormName} onChange={(e) => setEntFormName(e.target.value)} />
+                  <Input placeholder="Nom de la localisation" value={entFormName} onChange={(e) => setEntFormName(e.target.value)} />
                   <Button onClick={onCreateEntreprise}>Ajouter</Button>
                 </div>
               </div>
@@ -219,12 +220,11 @@ const SuperAdmin: React.FC = () => {
                   <SelectContent>
                     <SelectItem value="user">Utilisateur</SelectItem>
                     <SelectItem value="admin">Admin</SelectItem>
-                    <SelectItem value="superadmin">Super Admin</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <Label>Entreprise</Label>
+                <Label>Localisation</Label>
                 <Select value={form.enterprise_id} onValueChange={(v: any) => setForm({ ...form, enterprise_id: v })}>
                   <SelectTrigger>
                     <SelectValue placeholder="(Optionnel) Lier à une entreprise" />
