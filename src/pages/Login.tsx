@@ -49,7 +49,7 @@ const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-700 via-white to-orange-500 flex items-center">
+    <div className="min-h-screen bg-gradient-to-br from-blue-500 via-white to-orange-400 flex items-center">
       <div className="container mx-auto px-4">
         <div className="grid lg:grid-cols-2 gap-12 items-center w-full">
           {/* Slideshow à gauche */}
@@ -62,7 +62,7 @@ const Login: React.FC = () => {
                 >
                   <div className="mb-4">{s.icon}</div>
                   <h3 className="text-2xl font-semibold">{s.title}</h3>
-                  <p className="mt-2 text-muted-foreground">{s.text}</p>
+                  <p className="mt-2 text-black">{s.text}</p>
                 </div>
               ))}
               <button
@@ -112,7 +112,7 @@ const Login: React.FC = () => {
                     />
                   </div>
                 <CardTitle className="text-2xl">Bienvenue</CardTitle>
-                <CardDescription>Veuillez saisir votre code secret pour vous connecter.</CardDescription>
+                <CardDescription className="text-black">Veuillez saisir votre code secret pour vous connecter.</CardDescription>
               </CardHeader>
               <CardContent>
                 <form className="space-y-5" onSubmit={onSubmit}>
@@ -145,7 +145,7 @@ const Login: React.FC = () => {
                 </form>
               </CardContent>
             </Card>
-            <div className="mt-4 text-center text-xs text-muted-foreground space-y-1">
+            <div className="mt-4 text-center text-xs text-gray-900 space-y-1">
               <div>© {new Date().getFullYear()} Archi Pointe. Tous droits réservés.</div>
               <div>
                 Développé par {" "}

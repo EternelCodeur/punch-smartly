@@ -24,6 +24,15 @@ export const AdminDashboard: React.FC = () => {
   const [presentDialogOpen, setPresentDialogOpen] = useState(false);
   const [absentDialogOpen, setAbsentDialogOpen] = useState(false);
   const [leftDialogOpen, setLeftDialogOpen] = useState(false);
+  const [refreshTick, setRefreshTick] = useState(0);
+  const [firstLoadCounts, setFirstLoadCounts] = useState(true);
+  const [firstLoadEmps, setFirstLoadEmps] = useState(true);
+
+  // Silent auto-refresh every 60s
+  useEffect(() => {
+    const id = setInterval(() => setRefreshTick((t) => t + 1), 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   // Date/heure locales d'affichage
   const currentTime = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
@@ -41,14 +50,14 @@ export const AdminDashboard: React.FC = () => {
     const m = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
     return `${y}-${m}-${day}`;
-  }, []);
+  }, [refreshTick]);
 
   // Charger les compteurs du jour côté backend (indépendants du total)
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
-        setCountsLoading(true);
+        if (firstLoadCounts) setCountsLoading(true);
         setCountsError(null);
         const id = filterEntrepriseId !== 'all' ? Number(filterEntrepriseId) : undefined;
         const c = await getTodayCounts(id, true);
@@ -56,16 +65,17 @@ export const AdminDashboard: React.FC = () => {
       } catch (e: any) {
         if (alive) setCountsError(e?.message || 'Erreur des compteurs');
       } finally {
-        if (alive) setCountsLoading(false);
+        if (alive && firstLoadCounts) setCountsLoading(false);
+        if (alive && firstLoadCounts) setFirstLoadCounts(false);
       }
     })();
     return () => { alive = false; };
-  }, [filterEntrepriseId]);
+  }, [filterEntrepriseId, refreshTick, firstLoadCounts]);
 
   useEffect(() => {
     let mounted = true;
     (async () => {
-      setLoading(true);
+      if (firstLoadEmps) setLoading(true);
       setError(null);
       try {
         const data = await listEmployes();
@@ -73,11 +83,12 @@ export const AdminDashboard: React.FC = () => {
       } catch (e: any) {
         if (mounted) setError(e?.message || 'Erreur de chargement');
       } finally {
-        if (mounted) setLoading(false);
+        if (mounted && firstLoadEmps) setLoading(false);
+        if (mounted && firstLoadEmps) setFirstLoadEmps(false);
       }
     })();
     return () => { mounted = false; };
-  }, []);
+  }, [refreshTick, firstLoadEmps]);
 
   useEffect(() => {
     let mounted = true;

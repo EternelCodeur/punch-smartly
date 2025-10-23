@@ -11,12 +11,20 @@ export const AbsencesList: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [absences, setAbsences] = useState<Absence[]>([]);
   const [employes, setEmployes] = useState<Employe[]>([]);
+  const [firstLoad, setFirstLoad] = useState(true);
+  const [refreshTick, setRefreshTick] = useState(0);
 
   // Local filters
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | 'conge' | 'permission' | 'justified' | 'unjustified'>('all');
   const [selectedEmpId, setSelectedEmpId] = useState<number | null>(null);
   const [monthFilter, setMonthFilter] = useState(''); // YYYY-MM
+
+  // Silent auto-refresh every 60s
+  useEffect(() => {
+    const id = setInterval(() => setRefreshTick((t) => t + 1), 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -36,10 +44,11 @@ export const AbsencesList: React.FC = () => {
         setError(err?.message || 'Erreur de chargement');
       } finally {
         if (alive) setLoading(false);
+        if (alive && firstLoad) setFirstLoad(false);
       }
     })();
     return () => { alive = false; };
-  }, []);
+  }, [refreshTick]);
 
   const empById = useMemo(() => {
     const m = new Map<number, Employe>();
@@ -144,7 +153,7 @@ export const AbsencesList: React.FC = () => {
             </div>
           )}
 
-          {loading ? (
+          {firstLoad && loading ? (
             <p className="text-center text-muted-foreground">Chargement...</p>
           ) : error ? (
             <p className="text-center text-destructive">{error}</p>
