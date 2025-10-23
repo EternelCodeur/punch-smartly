@@ -231,6 +231,31 @@ const UserAttendance: React.FC = () => {
   const generatedAt = new Date().toLocaleString('fr-FR');
   const todayStr = new Date().toISOString().slice(0,10);
 
+  // Compute displayed monthly total: add 8h for permission days, 0h for congés
+  const computedTotalMins = useMemo(() => {
+    if (!summary) return 0;
+    let total = 0;
+    for (const e of summary.perDay) {
+      const dateKey = String(e.date).slice(0, 10);
+      const [yStr, mStr, dStr] = dateKey.split('-');
+      const y = Number(yStr);
+      const mIdx = Math.max(1, Number(mStr || '1')) - 1;
+      const dayNum = Math.max(1, Number(dStr || '1'));
+      const d = new Date(y, mIdx, dayNum);
+      const weekday = d.getDay();
+      if (weekday === 0 || weekday === 6) continue; // skip weekends like the table
+      const abs = absencesMap[dateKey];
+      if (abs) {
+        const status = (abs.status || '').toLowerCase();
+        if (status === 'permission') total += 8 * 60; // 8h
+        else total += 0; // congé or others -> 0h
+      } else {
+        total += e.mins;
+      }
+    }
+    return total;
+  }, [summary, absencesMap]);
+
   return (
     <div className="min-h-screen bg-background container mx-auto">
       <div className="container mx-auto p-6 space-y-6 print:p-2 print:space-y-2 print:[-webkit-print-color-adjust:exact] print:[print-color-adjust:exact]">
@@ -358,6 +383,9 @@ const UserAttendance: React.FC = () => {
                     const leaveLabel = absencesMap[dateKey]
                       ? [statusCap, absencesMap[dateKey]!.reason || null].filter(Boolean).join(' — ')
                       : '-';
+                    const rowMins = abs
+                      ? (((abs.status || '').toLowerCase() === 'permission') ? (8 * 60) : 0)
+                      : e.mins;
                     return (
                       <TableRow key={e.date} className={`print:text-[10px] ${isLeave ? 'bg-yellow-50 print:bg-yellow-100' : 'even:bg-muted/100 print:even:bg-gray-100'}`}>
                         <TableCell className="capitalize text-center px-3 py-2 print:px-4 print:py-2">{jour}</TableCell>
@@ -399,7 +427,7 @@ const UserAttendance: React.FC = () => {
                             isLeave ? '—' : (e.outSignature ? '✓' : '-')
                           )}
                         </TableCell>
-                        <TableCell className="text-center font-medium px-3 py-2 print:px-4 print:py-2">{isLeave ? '00:00' : formatHours(e.mins)}</TableCell>
+                        <TableCell className="text-center font-medium px-3 py-2 print:px-4 print:py-2">{formatHours(rowMins)}</TableCell>
                       </TableRow>
                     );
                   })}
@@ -414,7 +442,7 @@ const UserAttendance: React.FC = () => {
                       <TableCell
                         className="text-center font-bold px-3 py-2 print:px-4 print:py-2 border border-red-300 print:border-red-300"
                       >
-                        {formatHours(summary?.monthMins || 0)}
+                        {formatHours(computedTotalMins)}
                       </TableCell>
                     </TableRow>
                   )}

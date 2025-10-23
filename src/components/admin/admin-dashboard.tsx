@@ -9,6 +9,7 @@ import { AttendanceReports } from './attendance-reports';
 import { Users, Calendar, Download, Settings, CheckCircle, XCircle, Clock } from 'lucide-react';
 import { listEmployes, listEntreprises, getTodayCounts, type TodayCounts, type Employe, type Entreprise } from '@/lib/api';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { AbsencesList } from './absences-list';
 
 export const AdminDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState('users');
@@ -331,7 +332,7 @@ export const AdminDashboard: React.FC = () => {
 
       {/* Main Content Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="users" className="flex items-center gap-2">
             <Users className="h-4 w-4" />
             Gestion des Employées
@@ -339,6 +340,10 @@ export const AdminDashboard: React.FC = () => {
           <TabsTrigger value="reports" className="flex items-center gap-2">
             <Calendar className="h-4 w-4" />
             Gestion des sorties
+          </TabsTrigger>
+          <TabsTrigger value="conges" className="flex items-center gap-2">
+            <Calendar className="h-4 w-4" />
+            Gestion des congés & permissions
           </TabsTrigger>
         </TabsList>
 
@@ -348,6 +353,10 @@ export const AdminDashboard: React.FC = () => {
 
         <TabsContent value="reports" className="space-y-6">
           <AttendanceReports />
+        </TabsContent>
+
+        <TabsContent value="conges" className="space-y-6">
+          <AbsencesList />
         </TabsContent>
       </Tabs>
     </div>
